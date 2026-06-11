@@ -1,7 +1,7 @@
 // ui.js — нижняя панель (ячейка предмета, кнопки) и крупная подсказка-тост сверху.
 // Все тексты — через функцию t() из locales/, в коде только ключи.
 
-export function createUI({ t, onTake, onRotate, onReturn }) {
+export function createUI({ t, onTake, onRotate, onReturn, iconUrl }) {
   // Десктоп (есть мышь и наведение) — показываем подписи горячих клавиш на кнопках.
   // На сенсорном экране клавиатуры нет, поэтому подписи там не показываем.
   const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -19,7 +19,11 @@ export function createUI({ t, onTake, onRotate, onReturn }) {
   slotWrap.className = 'ui-slot-wrap';
   const slot = document.createElement('button');
   slot.className = 'ui-slot';
-  slot.textContent = '🪑'; // иконка-заглушка; в шаге 3 будут нормальные превью
+  // Иконка — превью 3D-модели предмета (рендерится в icon.js), всегда совпадает с моделью
+  const slotImg = document.createElement('img');
+  slotImg.className = 'ui-slot-img';
+  slotImg.src = iconUrl;
+  slot.appendChild(slotImg);
   const label = document.createElement('div');
   label.className = 'ui-slot-label';
   label.textContent = t('items.stool');
@@ -57,7 +61,7 @@ export function createUI({ t, onTake, onRotate, onReturn }) {
   function setState(state) {
     slotFull = state === 'inSlot';
     slot.classList.toggle('empty', !slotFull);
-    slot.textContent = slotFull ? '🪑' : '';
+    slotImg.style.visibility = slotFull ? 'visible' : 'hidden';
     rotateBtn.hidden = state !== 'placing';
     returnBtn.hidden = state !== 'placing';
     if (state === 'inSlot') showHint(t('ui.hint_take'));

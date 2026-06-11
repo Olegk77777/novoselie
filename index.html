@@ -48,6 +48,12 @@
       border-style: dashed;
       cursor: default;
     }
+    .ui-slot-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none; /* клики ловит сама кнопка-ячейка */
+    }
     .ui-slot-label {
       font-size: 11px;
       text-align: center;
@@ -119,6 +125,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=4"></script>
+  <script type="module" src="src/game.js?v=5"></script>
 </body>
 </html>

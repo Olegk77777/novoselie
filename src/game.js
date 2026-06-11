@@ -3,12 +3,13 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines } from './grid.js?v=4';
-import { createWalls, WALL_HEIGHT } from './walls.js?v=4';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=4';
-import { createStool } from './items.js?v=4';
-import { createPlacement } from './placement.js?v=4';
-import { createUI } from './ui.js?v=4';
+import { createFloor, createGridLines } from './grid.js?v=5';
+import { createWalls, WALL_HEIGHT } from './walls.js?v=5';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=5';
+import { createStool } from './items.js?v=5';
+import { createPlacement } from './placement.js?v=5';
+import { createUI } from './ui.js?v=5';
+import { renderItemIcon } from './icon.js?v=5';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -75,6 +76,7 @@ async function init() {
   // Панель предметов и контроллер расстановки
   const ui = createUI({
     t: (key) => t(locale, key),
+    iconUrl: renderItemIcon(createStool),
     onTake: () => placement.startPlacing(createStool),
     onRotate: () => placement.rotate(),
     onReturn: () => placement.cancel(),
