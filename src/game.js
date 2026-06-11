@@ -1,8 +1,8 @@
 // game.js — точка входа игры: сцена, изометрическая камера, рендер, главный цикл.
 
 import * as THREE from 'three';
-// ?v=N в импортах — версия для сброса кэша браузера. При изменении кода бампать
-// число и здесь, и в index.html (sed -i '' 's/?v=3/?v=3/g' index.html src/game.js).
+// ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
+// это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
 import { createFloor, createGridLines } from './grid.js?v=3';
 import { createWalls, WALL_HEIGHT } from './walls.js?v=3';
 import { createIsoCamera, attachZoomControls } from './camera.js?v=3';
