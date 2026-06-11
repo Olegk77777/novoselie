@@ -2,6 +2,10 @@
 // Все тексты — через функцию t() из locales/, в коде только ключи.
 
 export function createUI({ t, onTake, onRotate, onReturn }) {
+  // Десктоп (есть мышь и наведение) — показываем подписи горячих клавиш на кнопках.
+  // На сенсорном экране клавиатуры нет, поэтому подписи там не показываем.
+  const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const hotkey = (key) => (isDesktop ? ` (${key})` : '');
   // Тост-подсказка сверху экрана: крупная, чтобы была заметна и на планшете
   const toast = document.createElement('div');
   toast.id = 'ui-hint-toast';
@@ -24,11 +28,11 @@ export function createUI({ t, onTake, onRotate, onReturn }) {
   // Кнопки «Повернуть» и «Убрать» — видны, только когда предмет «в руке»
   const rotateBtn = document.createElement('button');
   rotateBtn.className = 'ui-btn';
-  rotateBtn.textContent = '⟳ ' + t('ui.rotate');
+  rotateBtn.textContent = '⟳ ' + t('ui.rotate') + hotkey('R');
   rotateBtn.hidden = true;
   const returnBtn = document.createElement('button');
   returnBtn.className = 'ui-btn';
-  returnBtn.textContent = '⤓ ' + t('ui.to_slot');
+  returnBtn.textContent = '⤓ ' + t('ui.to_slot') + hotkey('Esc');
   returnBtn.hidden = true;
 
   panel.append(slotWrap, rotateBtn, returnBtn);
