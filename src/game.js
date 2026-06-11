@@ -75,6 +75,7 @@ async function init() {
     t: (key) => t(locale, key),
     onTake: () => placement.startPlacing(createStool),
     onRotate: () => placement.rotate(),
+    onReturn: () => placement.cancel(),
   });
   const placement = createPlacement({
     scene,
@@ -100,6 +101,7 @@ async function init() {
 
   // Главный цикл: перерисовываем сцену каждый кадр
   renderer.setAnimationLoop(() => {
+    placement.update(); // плавный доворот предмета «в руке»
     renderer.render(scene, camera);
   });
 }

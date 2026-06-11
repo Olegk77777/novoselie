@@ -53,19 +53,44 @@
       text-align: center;
       margin-top: 4px;
     }
-    .ui-rotate {
-      padding: 8px 12px;
+    .ui-btn {
+      padding: 12px 16px;
       background: #2d2d44;
       border: 1px solid #6a6a8a;
       border-radius: 6px;
       color: inherit;
       font-family: inherit;
+      font-size: 14px;
       cursor: pointer;
     }
-    .ui-hint {
-      font-size: 12px;
-      opacity: 0.8;
-      max-width: 260px;
+    /* Крупная подсказка-тост сверху экрана */
+    #ui-hint-toast {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 18px;
+      background: rgba(20, 20, 40, 0.9);
+      border: 1px solid #6a6a8a;
+      border-radius: 8px;
+      color: #f0e6d2;
+      font-family: monospace;
+      font-size: 15px;
+      text-align: center;
+      max-width: 90vw;
+      pointer-events: none; /* не перехватывает клики по сцене */
+    }
+    #ui-hint-toast.flash {
+      animation: hint-flash 0.5s ease;
+    }
+    @keyframes hint-flash {
+      0% {
+        transform: translateX(-50%) scale(1.12);
+        background: rgba(90, 90, 140, 0.95);
+      }
+      100% {
+        transform: translateX(-50%) scale(1);
+      }
     }
     /* Плашка с ошибкой — показывается, только если игра не смогла запуститься */
     #error-overlay {

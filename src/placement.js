@@ -13,6 +13,7 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
   let ghost = null;             // полупрозрачный предмет «в руке»
   let buildFn = null;           // функция-строитель текущего предмета
   let rotationSteps = 0;        // 0..3 — повороты на 90°
+  let targetRotY = 0;           // угол, к которому призрак плавно доворачивается
   let currentCell = null;       // клетка под курсором {col,row}
 
   // Защита от случайной установки во время пинч-зума двумя пальцами
@@ -119,8 +120,12 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     if (ghost) return; // уже что-то в руке
     buildFn = itemBuildFn;
     rotationSteps = steps;
+    targetRotY = (steps * Math.PI) / 2;
     ghost = makeGhost();
     scene.add(ghost);
+    // Сразу показываем призрак в центре комнаты — на планшете иначе непонятно,
+    // что предмет «в руке», пока не коснёшься пола
+    updateGhost({ col: Math.floor(cols / 2), row: Math.floor(rows / 2) });
     onStateChange('placing');
   }
 
@@ -159,17 +164,24 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
   return {
     startPlacing,
     isPlacing: () => ghost !== null,
-    // Повернуть предмет «в руке» на 90°
+    // Повернуть предмет «в руке» на 90° (доворачивается плавно — см. update)
     rotate() {
       if (!ghost) return;
       rotationSteps = (rotationSteps + 1) % 4;
-      ghost.rotation.y = (rotationSteps * Math.PI) / 2;
+      targetRotY += Math.PI / 2;
     },
     // Отмена: предмет возвращается в ячейку панели
     cancel() {
       if (!ghost) return;
       removeGhost();
       onStateChange('cancelled');
+    },
+    // Вызывается каждый кадр из главного цикла: плавный доворот призрака
+    update() {
+      if (!ghost) return;
+      const diff = targetRotY - ghost.rotation.y;
+      if (Math.abs(diff) > 0.001) ghost.rotation.y += diff * 0.25;
+      else ghost.rotation.y = targetRotY;
     },
   };
 }

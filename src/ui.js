@@ -1,7 +1,12 @@
-// ui.js — нижняя панель: ячейка с предметом, кнопка поворота, строка-подсказка.
+// ui.js — нижняя панель (ячейка предмета, кнопки) и крупная подсказка-тост сверху.
 // Все тексты — через функцию t() из locales/, в коде только ключи.
 
-export function createUI({ t, onTake, onRotate }) {
+export function createUI({ t, onTake, onRotate, onReturn }) {
+  // Тост-подсказка сверху экрана: крупная, чтобы была заметна и на планшете
+  const toast = document.createElement('div');
+  toast.id = 'ui-hint-toast';
+  document.body.appendChild(toast);
+
   const panel = document.createElement('div');
   panel.id = 'ui-panel';
 
@@ -16,17 +21,17 @@ export function createUI({ t, onTake, onRotate }) {
   label.textContent = t('items.stool');
   slotWrap.append(slot, label);
 
-  // Кнопка поворота (видна, только когда предмет «в руке»)
+  // Кнопки «Повернуть» и «Убрать» — видны, только когда предмет «в руке»
   const rotateBtn = document.createElement('button');
-  rotateBtn.className = 'ui-rotate';
+  rotateBtn.className = 'ui-btn';
   rotateBtn.textContent = '⟳ ' + t('ui.rotate');
   rotateBtn.hidden = true;
+  const returnBtn = document.createElement('button');
+  returnBtn.className = 'ui-btn';
+  returnBtn.textContent = '⤓ ' + t('ui.to_slot');
+  returnBtn.hidden = true;
 
-  // Подсказка, что делать дальше
-  const hint = document.createElement('div');
-  hint.className = 'ui-hint';
-
-  panel.append(slotWrap, rotateBtn, hint);
+  panel.append(slotWrap, rotateBtn, returnBtn);
   document.body.appendChild(panel);
 
   let slotFull = true;
@@ -34,6 +39,15 @@ export function createUI({ t, onTake, onRotate }) {
     if (slotFull) onTake();
   });
   rotateBtn.addEventListener('click', onRotate);
+  returnBtn.addEventListener('click', onReturn);
+
+  // Показывает подсказку со «вспышкой», чтобы смена текста бросалась в глаза
+  function showHint(text) {
+    toast.textContent = text;
+    toast.classList.remove('flash');
+    void toast.offsetWidth; // перезапуск CSS-анимации: браузер «замечает» снятие класса
+    toast.classList.add('flash');
+  }
 
   // Состояния: 'inSlot' — предмет в ячейке, 'placing' — в руке, 'placed' — стоит на полу
   function setState(state) {
@@ -41,9 +55,10 @@ export function createUI({ t, onTake, onRotate }) {
     slot.classList.toggle('empty', !slotFull);
     slot.textContent = slotFull ? '🪑' : '';
     rotateBtn.hidden = state !== 'placing';
-    if (state === 'inSlot') hint.textContent = t('ui.hint_take');
-    else if (state === 'placing') hint.textContent = t('ui.hint_place');
-    else hint.textContent = t('ui.hint_pickup');
+    returnBtn.hidden = state !== 'placing';
+    if (state === 'inSlot') showHint(t('ui.hint_take'));
+    else if (state === 'placing') showHint(t('ui.hint_place'));
+    else showHint(t('ui.hint_pickup'));
   }
 
   setState('inSlot');
