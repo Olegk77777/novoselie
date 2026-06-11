@@ -1,12 +1,14 @@
 // game.js — точка входа игры: сцена, изометрическая камера, рендер, главный цикл.
 
 import * as THREE from 'three';
-import { createFloor, createGridLines } from './grid.js';
-import { createWalls, WALL_HEIGHT } from './walls.js';
-import { createIsoCamera, attachZoomControls } from './camera.js';
-import { createStool } from './items.js';
-import { createPlacement } from './placement.js';
-import { createUI } from './ui.js';
+// ?v=N в импортах — версия для сброса кэша браузера. При изменении кода бампать
+// число и здесь, и в index.html (sed -i '' 's/?v=2/?v=3/g' index.html src/game.js).
+import { createFloor, createGridLines } from './grid.js?v=2';
+import { createWalls, WALL_HEIGHT } from './walls.js?v=2';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=2';
+import { createStool } from './items.js?v=2';
+import { createPlacement } from './placement.js?v=2';
+import { createUI } from './ui.js?v=2';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;

@@ -66,12 +66,11 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
   }
 
   function updateGhost(cell) {
-    currentCell = cell;
     if (!ghost) return;
-    if (!cell) {
-      ghost.visible = false;
-      return;
-    }
+    // Курсор ушёл с пола (к кнопкам, в тёмную зону) — НЕ прячем призрак,
+    // оставляем его на последней клетке, чтобы дотянуться до кнопок
+    if (!cell) return;
+    currentCell = cell;
     ghost.visible = true;
     ghost.position.copy(cellCenter(cell));
     tintGhost(!occupied.has(cellKey(cell)));
