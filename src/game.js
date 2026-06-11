@@ -2,13 +2,11 @@
 
 import * as THREE from 'three';
 import { createFloor, createGridLines } from './grid.js';
+import { createIsoCamera, attachZoomControls } from './camera.js';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
 const GRID_ROWS = 8;
-
-// Высота "окна" ортографической камеры в юнитах — сколько сцены видно по вертикали
-const FRUSTUM_HEIGHT = 14;
 
 // Загружает словарь текстов (локализацию). В коде — только ключи, тексты — в JSON.
 async function loadLocale(lang) {
@@ -42,19 +40,8 @@ async function init() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a2e); // холодные сумерки за окном
 
-  // Ортографическая камера: нет перспективы — то, что нужно для изометрии.
-  // Стоит по диагонали сверху и смотрит в центр комнаты. Зафиксирована.
-  const aspect = window.innerWidth / window.innerHeight;
-  const camera = new THREE.OrthographicCamera(
-    (-FRUSTUM_HEIGHT * aspect) / 2,
-    (FRUSTUM_HEIGHT * aspect) / 2,
-    FRUSTUM_HEIGHT / 2,
-    -FRUSTUM_HEIGHT / 2,
-    0.1,
-    100
-  );
-  camera.position.set(10, 10, 10);
-  camera.lookAt(0, 0, 0);
+  // Изометрическая камера (модуль camera.js): сама вписывает комнату в экран.
+  const { camera, resize: resizeCamera, zoomBy } = createIsoCamera(GRID_COLS, GRID_ROWS);
 
   // Свет: тёплая "лампа" сверху + мягкая общая подсветка, чтобы тени не были чёрными
   const lampLight = new THREE.DirectionalLight(0xffd9a0, 2.0);
@@ -72,12 +59,12 @@ async function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
+  // Управление зумом: колесо мыши + щипок двумя пальцами на сенсоре
+  attachZoomControls(renderer.domElement, zoomBy);
+
   // При изменении размера окна пересчитываем камеру и холст
   window.addEventListener('resize', () => {
-    const newAspect = window.innerWidth / window.innerHeight;
-    camera.left = (-FRUSTUM_HEIGHT * newAspect) / 2;
-    camera.right = (FRUSTUM_HEIGHT * newAspect) / 2;
-    camera.updateProjectionMatrix();
+    resizeCamera();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
