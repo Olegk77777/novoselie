@@ -12,7 +12,8 @@ const MIN_USER_ZOOM = 0.6;
 const MAX_USER_ZOOM = 3.0;
 
 // Создаёт изокамеру и возвращает её вместе с функциями resize() и zoomBy().
-export function createIsoCamera(floorCols, floorRows) {
+// fitHeight — высота сцены (стены), которую тоже надо вписать в экран.
+export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
   const aspect = window.innerWidth / window.innerHeight;
   const camera = new THREE.OrthographicCamera(
     (-BASE_FRUSTUM * aspect) / 2,
@@ -22,18 +23,24 @@ export function createIsoCamera(floorCols, floorRows) {
     0.1,
     100
   );
-  camera.position.set(10, 10, 10);
-  camera.lookAt(0, 0, 0);
+  // Смотрим не в пол, а в середину объёма комнаты (пол + стены) — так
+  // картинка центрируется по вертикали без пустого низа
+  const targetY = fitHeight / 2;
+  camera.position.set(10, 10 + targetY, 10);
+  camera.lookAt(0, targetY, 0);
 
-  // Четыре угла пола — по ним считаем, какой зум нужен, чтобы пол влез в экран
+  // Углы комнаты (пол + верх стен) — по ним считаем зум, чтобы всё влезло в экран
   const halfW = floorCols / 2;
   const halfD = floorRows / 2;
-  const corners = [
-    new THREE.Vector3(-halfW, 0, -halfD),
-    new THREE.Vector3(halfW, 0, -halfD),
-    new THREE.Vector3(halfW, 0, halfD),
-    new THREE.Vector3(-halfW, 0, halfD),
-  ];
+  const corners = [];
+  for (const y of [0, fitHeight]) {
+    corners.push(
+      new THREE.Vector3(-halfW, y, -halfD),
+      new THREE.Vector3(halfW, y, -halfD),
+      new THREE.Vector3(halfW, y, halfD),
+      new THREE.Vector3(-halfW, y, halfD)
+    );
+  }
 
   // Ручной множитель зума от пользователя (колесо/пинч). 1.0 = ровно авто-вписывание.
   let userZoom = 1.0;

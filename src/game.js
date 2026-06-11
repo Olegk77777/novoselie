@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import { createFloor, createGridLines } from './grid.js';
+import { createWalls, WALL_HEIGHT } from './walls.js';
 import { createIsoCamera, attachZoomControls } from './camera.js';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
@@ -41,7 +42,7 @@ async function init() {
   scene.background = new THREE.Color(0x1a1a2e); // холодные сумерки за окном
 
   // Изометрическая камера (модуль camera.js): сама вписывает комнату в экран.
-  const { camera, resize: resizeCamera, zoomBy } = createIsoCamera(GRID_COLS, GRID_ROWS);
+  const { camera, resize: resizeCamera, zoomBy } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
 
   // Свет: тёплая "лампа" сверху + мягкая общая подсветка, чтобы тени не были чёрными
   const lampLight = new THREE.DirectionalLight(0xffd9a0, 2.0);
@@ -49,9 +50,10 @@ async function init() {
   scene.add(lampLight);
   scene.add(new THREE.AmbientLight(0x9090b0, 1.0));
 
-  // Пол и сетка
+  // Пол, сетка и стены
   scene.add(createFloor(GRID_COLS, GRID_ROWS));
   scene.add(createGridLines(GRID_COLS, GRID_ROWS));
+  scene.add(createWalls(GRID_COLS, GRID_ROWS));
 
   // Рендерер — рисует сцену в <canvas> на странице
   const renderer = new THREE.WebGLRenderer({ antialias: true });

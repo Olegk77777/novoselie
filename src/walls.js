@@ -1,0 +1,117 @@
+// walls.js — стены комнаты: две дальние (видимые в изометрии), окно и дверной проём.
+// Ближние к камере стены не рисуем, чтобы видеть внутрь комнаты — приём всех изо-игр.
+// Позиции окна и двери пока константы здесь; при переходе на data/layouts.json переедут в данные.
+
+import * as THREE from 'three';
+
+// Высота стен в юнитах (1 клетка = 1 юнит). Экспортируется для вписывания камеры.
+export const WALL_HEIGHT = 2.5;
+const THICKNESS = 0.2; // толщина стен
+const PLASTER_COLOR = 0x9aa07a; // блёклая зелёная краска — заглушка, пока нет обоев
+// Один "лист" текстуры обоев покрывает квадрат 2×2 юнита
+const WALLPAPER_TILE = 2;
+
+// Окно в дальней стене (z = -rows/2): границы по X и по высоте
+const WINDOW = { from: -1.5, to: 1.5, bottom: 0.8, top: 2.1 };
+// Дверной проём в левой стене (x = -cols/2): границы по Z и высота проёма
+const DOOR = { from: 1.0, to: 2.5, top: 2.1 };
+
+// Создаёт обе стены, окно и проём; возвращает группу для добавления в сцену
+export function createWalls(cols, rows) {
+  const group = new THREE.Group();
+  const halfW = cols / 2;
+  const halfD = rows / 2;
+
+  // Общий материал стен; при загрузке обоев каждому сегменту выдадим свою копию текстуры
+  const wallMaterial = new THREE.MeshLambertMaterial({ color: PLASTER_COLOR });
+
+  // Вспомогалка: добавляет кусок стены (бокс) с центром в (x, y, z).
+  // texW/texH — размеры лицевой стороны, по ним потом считается повтор обоев.
+  function addSegment(w, h, d, x, y, z, texW, texH) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMaterial);
+    mesh.position.set(x, y, z);
+    mesh.userData.wallpaper = { texW, texH };
+    group.add(mesh);
+  }
+
+  // === Дальняя стена (вдоль X, у края z = -halfD), с окном ===
+  const backZ = -halfD - THICKNESS / 2;
+  const backFrom = -halfW - THICKNESS; // заходим за угол, чтобы стены сомкнулись
+  const backTo = halfW;
+  // Слева от окна
+  addSegment(
+    WINDOW.from - backFrom, WALL_HEIGHT, THICKNESS,
+    (backFrom + WINDOW.from) / 2, WALL_HEIGHT / 2, backZ,
+    WINDOW.from - backFrom, WALL_HEIGHT
+  );
+  // Справа от окна
+  addSegment(
+    backTo - WINDOW.to, WALL_HEIGHT, THICKNESS,
+    (WINDOW.to + backTo) / 2, WALL_HEIGHT / 2, backZ,
+    backTo - WINDOW.to, WALL_HEIGHT
+  );
+  // Под окном
+  addSegment(
+    WINDOW.to - WINDOW.from, WINDOW.bottom, THICKNESS,
+    (WINDOW.from + WINDOW.to) / 2, WINDOW.bottom / 2, backZ,
+    WINDOW.to - WINDOW.from, WINDOW.bottom
+  );
+  // Над окном
+  addSegment(
+    WINDOW.to - WINDOW.from, WALL_HEIGHT - WINDOW.top, THICKNESS,
+    (WINDOW.from + WINDOW.to) / 2, (WINDOW.top + WALL_HEIGHT) / 2, backZ,
+    WINDOW.to - WINDOW.from, WALL_HEIGHT - WINDOW.top
+  );
+  // "Стекло": холодные сумерки за окном. MeshBasic не зависит от света — как будто светится.
+  const pane = new THREE.Mesh(
+    new THREE.BoxGeometry(WINDOW.to - WINDOW.from, WINDOW.top - WINDOW.bottom, THICKNESS / 4),
+    new THREE.MeshBasicMaterial({ color: 0x4a5a8a })
+  );
+  pane.position.set((WINDOW.from + WINDOW.to) / 2, (WINDOW.bottom + WINDOW.top) / 2, backZ);
+  group.add(pane);
+
+  // === Левая стена (вдоль Z, у края x = -halfW), с дверным проёмом ===
+  const leftX = -halfW - THICKNESS / 2;
+  const leftFrom = -halfD - THICKNESS;
+  const leftTo = halfD;
+  // До проёма
+  addSegment(
+    THICKNESS, WALL_HEIGHT, DOOR.from - leftFrom,
+    leftX, WALL_HEIGHT / 2, (leftFrom + DOOR.from) / 2,
+    DOOR.from - leftFrom, WALL_HEIGHT
+  );
+  // После проёма
+  addSegment(
+    THICKNESS, WALL_HEIGHT, leftTo - DOOR.to,
+    leftX, WALL_HEIGHT / 2, (DOOR.to + leftTo) / 2,
+    leftTo - DOOR.to, WALL_HEIGHT
+  );
+  // Перемычка над проёмом
+  addSegment(
+    THICKNESS, WALL_HEIGHT - DOOR.top, DOOR.to - DOOR.from,
+    leftX, (DOOR.top + WALL_HEIGHT) / 2, (DOOR.from + DOOR.to) / 2,
+    DOOR.to - DOOR.from, WALL_HEIGHT - DOOR.top
+  );
+
+  // Обои: грузим один раз, каждому сегменту — своя копия с повтором под его размер,
+  // чтобы узор был одного масштаба на кусках разной величины
+  new THREE.TextureLoader().load(
+    'textures/wall_wallpaper.jpg',
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      group.children.forEach((mesh) => {
+        if (!mesh.userData.wallpaper) return;
+        const { texW, texH } = mesh.userData.wallpaper;
+        const tex = texture.clone();
+        tex.repeat.set(texW / WALLPAPER_TILE, texH / WALLPAPER_TILE);
+        mesh.material = new THREE.MeshLambertMaterial({ map: tex });
+      });
+    },
+    undefined,
+    () => console.warn('Текстура обоев не найдена (textures/wall_wallpaper.jpg) — стены пока цветом.')
+  );
+
+  return group;
+}
