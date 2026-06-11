@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Заголовок вкладки подставляется из locales/ru.json при запуске игры -->
+  <title>...</title>
+  <style>
+    /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #1a1a2e;
+    }
+    canvas { display: block; }
+    /* Плашка с ошибкой — показывается, только если игра не смогла запуститься */
+    #error-overlay {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 16px 24px;
+      background: #2d2d44;
+      color: #f0e6d2;
+      font-family: monospace;
+      border: 2px solid #f0e6d2;
+    }
+  </style>
+  <!-- importmap говорит браузеру, где брать Three.js (с CDN, версия зафиксирована) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="error-overlay"></div>
+  <script type="module" src="src/game.js"></script>
+</body>
+</html>

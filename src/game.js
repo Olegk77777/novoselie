@@ -1,0 +1,93 @@
+// game.js — точка входа игры: сцена, изометрическая камера, рендер, главный цикл.
+
+import * as THREE from 'three';
+import { createFloor, createGridLines } from './grid.js';
+
+// Размер комнаты в клетках (см. CONCEPT.md, v0.1)
+const GRID_COLS = 10;
+const GRID_ROWS = 8;
+
+// Высота "окна" ортографической камеры в юнитах — сколько сцены видно по вертикали
+const FRUSTUM_HEIGHT = 14;
+
+// Загружает словарь текстов (локализацию). В коде — только ключи, тексты — в JSON.
+async function loadLocale(lang) {
+  try {
+    const response = await fetch(`locales/${lang}.json`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (err) {
+    console.error('Не удалось загрузить локализацию:', err);
+    return {};
+  }
+}
+
+// Достаёт текст по ключу вида "game.title"; если нет — возвращает сам ключ
+function t(dict, key) {
+  return key.split('.').reduce((obj, part) => (obj ? obj[part] : undefined), dict) ?? key;
+}
+
+// Показывает плашку с ошибкой, если игра не смогла запуститься
+function showError(message) {
+  const overlay = document.getElementById('error-overlay');
+  overlay.textContent = message;
+  overlay.style.display = 'block';
+}
+
+async function init() {
+  const locale = await loadLocale('ru');
+  document.title = t(locale, 'game.title');
+
+  // Сцена — "мир", в который добавляются все объекты
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a2e); // холодные сумерки за окном
+
+  // Ортографическая камера: нет перспективы — то, что нужно для изометрии.
+  // Стоит по диагонали сверху и смотрит в центр комнаты. Зафиксирована.
+  const aspect = window.innerWidth / window.innerHeight;
+  const camera = new THREE.OrthographicCamera(
+    (-FRUSTUM_HEIGHT * aspect) / 2,
+    (FRUSTUM_HEIGHT * aspect) / 2,
+    FRUSTUM_HEIGHT / 2,
+    -FRUSTUM_HEIGHT / 2,
+    0.1,
+    100
+  );
+  camera.position.set(10, 10, 10);
+  camera.lookAt(0, 0, 0);
+
+  // Свет: тёплая "лампа" сверху + мягкая общая подсветка, чтобы тени не были чёрными
+  const lampLight = new THREE.DirectionalLight(0xffd9a0, 2.0);
+  lampLight.position.set(5, 10, 3);
+  scene.add(lampLight);
+  scene.add(new THREE.AmbientLight(0x9090b0, 1.0));
+
+  // Пол и сетка
+  scene.add(createFloor(GRID_COLS, GRID_ROWS));
+  scene.add(createGridLines(GRID_COLS, GRID_ROWS));
+
+  // Рендерер — рисует сцену в <canvas> на странице
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  // При изменении размера окна пересчитываем камеру и холст
+  window.addEventListener('resize', () => {
+    const newAspect = window.innerWidth / window.innerHeight;
+    camera.left = (-FRUSTUM_HEIGHT * newAspect) / 2;
+    camera.right = (FRUSTUM_HEIGHT * newAspect) / 2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // Главный цикл: перерисовываем сцену каждый кадр
+  renderer.setAnimationLoop(() => {
+    renderer.render(scene, camera);
+  });
+}
+
+init().catch((err) => {
+  console.error('Игра не запустилась:', err);
+  showError('Failed to start. Open browser console (F12) for details.');
+});
