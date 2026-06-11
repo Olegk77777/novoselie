@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import { createFloor, createGridLines } from './grid.js';
 import { createWalls, WALL_HEIGHT } from './walls.js';
 import { createIsoCamera, attachZoomControls } from './camera.js';
+import { createStool } from './items.js';
+import { createPlacement } from './placement.js';
+import { createUI } from './ui.js';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -12,7 +15,9 @@ const GRID_ROWS = 8;
 // Загружает словарь текстов (локализацию). В коде — только ключи, тексты — в JSON.
 async function loadLocale(lang) {
   try {
-    const response = await fetch(`locales/${lang}.json`);
+    // cache: 'no-cache' — браузер каждый раз сверяет файл с сервером,
+    // иначе после обновления текстов может показать старую версию из кэша
+    const response = await fetch(`locales/${lang}.json`, { cache: 'no-cache' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
   } catch (err) {
@@ -50,8 +55,9 @@ async function init() {
   scene.add(lampLight);
   scene.add(new THREE.AmbientLight(0x9090b0, 1.0));
 
-  // Пол, сетка и стены
-  scene.add(createFloor(GRID_COLS, GRID_ROWS));
+  // Пол, сетка и стены (пол сохраняем — по нему стреляет луч расстановки)
+  const floor = createFloor(GRID_COLS, GRID_ROWS);
+  scene.add(floor);
   scene.add(createGridLines(GRID_COLS, GRID_ROWS));
   scene.add(createWalls(GRID_COLS, GRID_ROWS));
 
@@ -63,6 +69,28 @@ async function init() {
 
   // Управление зумом: колесо мыши + щипок двумя пальцами на сенсоре
   attachZoomControls(renderer.domElement, zoomBy);
+
+  // Панель предметов и контроллер расстановки
+  const ui = createUI({
+    t: (key) => t(locale, key),
+    onTake: () => placement.startPlacing(createStool),
+    onRotate: () => placement.rotate(),
+  });
+  const placement = createPlacement({
+    scene,
+    camera,
+    canvas: renderer.domElement,
+    floor,
+    cols: GRID_COLS,
+    rows: GRID_ROWS,
+    onStateChange: (state) => ui.setState(state === 'cancelled' ? 'inSlot' : state),
+  });
+
+  // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyR') placement.rotate();
+    else if (e.code === 'Escape') placement.cancel();
+  });
 
   // При изменении размера окна пересчитываем камеру и холст
   window.addEventListener('resize', () => {
