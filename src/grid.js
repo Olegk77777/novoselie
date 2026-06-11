@@ -9,8 +9,26 @@ import * as THREE from 'three';
 // Создаёт плоскость пола размером cols × rows клеток
 export function createFloor(cols, rows) {
   const geometry = new THREE.PlaneGeometry(cols, rows);
-  // Пока текстуры нет — простой тёплый коричневый цвет (потом натянем паркет)
+  // Цвет-заглушка: виден, пока текстура грузится (или если не загрузится)
   const material = new THREE.MeshLambertMaterial({ color: 0x8a6a45 });
+
+  new THREE.TextureLoader().load(
+    'textures/floor_parquet.jpg',
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      // Повторяем текстуру по полу: один "лист" паркета = 2×2 клетки
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(cols / 2, rows / 2);
+      material.map = texture;
+      // Белый цвет, чтобы заглушка не тонировала текстуру
+      material.color.set(0xffffff);
+      material.needsUpdate = true;
+    },
+    undefined,
+    (err) => console.error('Не удалось загрузить текстуру пола:', err)
+  );
+
   const floor = new THREE.Mesh(geometry, material);
   // Плоскость по умолчанию стоит вертикально — кладём её горизонтально
   floor.rotation.x = -Math.PI / 2;
@@ -38,9 +56,9 @@ export function createGridLines(cols, rows) {
 
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
-    color: 0x2b1d10,
+    color: 0x120c06,
     transparent: true,
-    opacity: 0.35,
+    opacity: 0.55,
   });
   return new THREE.LineSegments(geometry, material);
 }
