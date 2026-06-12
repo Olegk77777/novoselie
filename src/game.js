@@ -3,13 +3,13 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines } from './grid.js?v=5';
-import { createWalls, WALL_HEIGHT } from './walls.js?v=5';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=5';
-import { createStool } from './items.js?v=5';
-import { createPlacement } from './placement.js?v=5';
-import { createUI } from './ui.js?v=5';
-import { renderItemIcon } from './icon.js?v=5';
+import { createFloor, createGridLines } from './grid.js?v=6';
+import { createWalls, WALL_HEIGHT } from './walls.js?v=6';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=6';
+import { MODEL_BUILDERS } from './items.js?v=6';
+import { createPlacement } from './placement.js?v=6';
+import { createUI } from './ui.js?v=6';
+import { renderItemIcon } from './icon.js?v=6';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -32,6 +32,13 @@ async function loadLocale(lang) {
 // Достаёт текст по ключу вида "game.title"; если нет — возвращает сам ключ
 function t(dict, key) {
   return key.split('.').reduce((obj, part) => (obj ? obj[part] : undefined), dict) ?? key;
+}
+
+// Загружает список предметов из data/items.json
+async function loadItems() {
+  const response = await fetch('data/items.json', { cache: 'no-cache' });
+  if (!response.ok) throw new Error(`items.json: HTTP ${response.status}`);
+  return (await response.json()).items;
 }
 
 // Показывает плашку с ошибкой, если игра не смогла запуститься
@@ -73,11 +80,37 @@ async function init() {
   // Управление зумом: колесо мыши + щипок двумя пальцами на сенсоре
   attachZoomControls(renderer.domElement, zoomBy);
 
+  // Предметы из data/items.json: каждому — функция-строитель модели и иконка из неё
+  const records = await loadItems();
+  const defs = new Map(); // id → описание предмета (с buildFn)
+  const uiItems = [];
+  for (const record of records) {
+    const buildFn = MODEL_BUILDERS[record.model];
+    if (!buildFn) {
+      console.warn(`Нет модели "${record.model}" для предмета "${record.id}" — пропускаю.`);
+      continue;
+    }
+    const def = { ...record, buildFn };
+    defs.set(def.id, def);
+    uiItems.push({
+      id: def.id,
+      name: t(locale, `items.${def.id}`),
+      iconUrl: renderItemIcon(buildFn),
+      count: def.count ?? 1,
+      // Настенные предметы пока нельзя ставить — повесим в отдельном шаге
+      enabled: def.placement !== 'wall',
+    });
+  }
+
   // Панель предметов и контроллер расстановки
   const ui = createUI({
     t: (key) => t(locale, key),
-    iconUrl: renderItemIcon(createStool),
-    onTake: () => placement.startPlacing(createStool),
+    items: uiItems,
+    onTake: (id) => {
+      if (placement.isPlacing()) return; // в руке уже есть предмет
+      ui.changeCount(id, -1);
+      placement.startPlacing(defs.get(id));
+    },
     onRotate: () => placement.rotate(),
     onReturn: () => placement.cancel(),
   });
@@ -88,8 +121,17 @@ async function init() {
     floor,
     cols: GRID_COLS,
     rows: GRID_ROWS,
-    onStateChange: (state) => ui.setState(state === 'cancelled' ? 'inSlot' : state),
+    onStateChange: (state, itemId) => {
+      // Отмена — предмет возвращается в свою ячейку
+      if (state === 'cancelled') {
+        ui.changeCount(itemId, +1);
+        ui.setState('inSlot');
+      } else {
+        ui.setState(state);
+      }
+    },
   });
+  ui.setState('inSlot');
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
   window.addEventListener('keydown', (e) => {
