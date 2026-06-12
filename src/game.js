@@ -3,13 +3,13 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines } from './grid.js?v=6';
-import { createWalls, WALL_HEIGHT } from './walls.js?v=6';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=6';
-import { MODEL_BUILDERS } from './items.js?v=6';
-import { createPlacement } from './placement.js?v=6';
-import { createUI } from './ui.js?v=6';
-import { renderItemIcon } from './icon.js?v=6';
+import { createFloor, createGridLines } from './grid.js?v=7';
+import { createWalls, WALL_HEIGHT } from './walls.js?v=7';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=7';
+import { MODEL_BUILDERS } from './items.js?v=7';
+import { createPlacement } from './placement.js?v=7';
+import { createUI } from './ui.js?v=7';
+import { renderItemIcon } from './icon.js?v=7';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -102,10 +102,16 @@ async function init() {
     });
   }
 
+  // Максимум уюта = сумма очков всех доступных предметов (для шкалы)
+  const maxComfort = records
+    .filter((r) => r.placement !== 'wall')
+    .reduce((sum, r) => sum + (r.comfort || 0) * (r.count ?? 1), 0);
+
   // Панель предметов и контроллер расстановки
   const ui = createUI({
     t: (key) => t(locale, key),
     items: uiItems,
+    maxComfort,
     onTake: (id) => {
       if (placement.isPlacing()) return; // в руке уже есть предмет
       ui.changeCount(id, -1);
@@ -130,6 +136,7 @@ async function init() {
         ui.setState(state);
       }
     },
+    onComfortChange: (total) => ui.setComfort(total),
   });
   ui.setState('inSlot');
 

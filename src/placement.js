@@ -5,7 +5,8 @@ import * as THREE from 'three';
 
 // Создаёт контроллер расстановки.
 // onStateChange(state, itemId): 'placing' | 'placed' | 'cancelled'
-export function createPlacement({ scene, camera, canvas, floor, cols, rows, onStateChange }) {
+// onComfortChange(total): сумма очков уюта всех поставленных предметов
+export function createPlacement({ scene, camera, canvas, floor, cols, rows, onStateChange, onComfortChange }) {
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   // Два слоя занятости: мебель и ковры. Ковёр не занимает клетки мебели,
@@ -25,6 +26,12 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
 
   const layerOf = (d) => (d.layer === 'rug' ? 'rug' : 'furniture');
   const keyOf = (col, row) => `${col},${row}`;
+
+  // Пересчитать уют по всем поставленным предметам и сообщить наружу
+  function reportComfort() {
+    const total = placedItems.reduce((sum, item) => sum + (item.userData.def.comfort || 0), 0);
+    onComfortChange(total);
+  }
 
   // Габариты в клетках с учётом поворота (90°/270° меняют ширину и глубину местами)
   function footprint(steps) {
@@ -141,6 +148,7 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     const placedId = def.id;
     removeGhost();
     onStateChange('placed', placedId);
+    reportComfort();
   }
 
   // Клик по поставленному предмету — забираем его обратно «в руку»
@@ -158,6 +166,7 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     const set = occupied[layerOf(itemDef)];
     item.userData.keys.forEach((k) => set.delete(k));
     startPlacing(itemDef, item.userData.rotationSteps, item.userData.anchor);
+    reportComfort();
   }
 
   // Взять предмет «в руку» (из ячейки или после подбора с пола)

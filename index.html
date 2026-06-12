@@ -105,6 +105,39 @@
       font-size: 14px;
       cursor: pointer;
     }
+    /* Шкала уюта слева сверху */
+    #ui-comfort {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      padding: 8px 12px;
+      background: rgba(20, 20, 40, 0.85);
+      border: 1px solid #4a4a6a;
+      border-radius: 8px;
+      color: #f0e6d2;
+      font-family: monospace;
+      font-size: 13px;
+      user-select: none;
+      pointer-events: none;
+    }
+    .ui-comfort-value {
+      opacity: 0.85;
+    }
+    .ui-comfort-bar {
+      width: 140px;
+      height: 10px;
+      margin-top: 6px;
+      background: #2d2d44;
+      border: 1px solid #6a6a8a;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .ui-comfort-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #c97f3d, #e8b96a);
+      transition: width 0.4s ease; /* полоска растёт плавно */
+    }
     /* Крупная подсказка-тост сверху экрана */
     #ui-hint-toast {
       position: fixed;
@@ -124,6 +157,12 @@
     }
     #ui-hint-toast.flash {
       animation: hint-flash 0.5s ease;
+    }
+    /* На неширких экранах тост опускается ниже шкалы уюта, чтобы не перекрывались */
+    @media (max-width: 900px) {
+      #ui-hint-toast {
+        top: 78px;
+      }
     }
     @keyframes hint-flash {
       0% {
@@ -161,6 +200,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=6"></script>
+  <script type="module" src="src/game.js?v=7"></script>
 </body>
 </html>

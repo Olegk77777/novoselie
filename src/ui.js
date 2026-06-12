@@ -2,7 +2,7 @@
 // Все тексты — через функцию t() из locales/, в коде только ключи.
 // items: [{ id, name, iconUrl, count, enabled }] — из data/items.json (game.js).
 
-export function createUI({ t, items, onTake, onRotate, onReturn }) {
+export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   // Десктоп (есть мышь и наведение) — показываем подписи горячих клавиш на кнопках.
   const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const hotkey = (key) => (isDesktop ? ` (${key})` : '');
@@ -11,6 +11,22 @@ export function createUI({ t, items, onTake, onRotate, onReturn }) {
   const toast = document.createElement('div');
   toast.id = 'ui-hint-toast';
   document.body.appendChild(toast);
+
+  // Шкала уюта (слева сверху): подпись, число и полоска-прогресс
+  const comfortBox = document.createElement('div');
+  comfortBox.id = 'ui-comfort';
+  const comfortTitle = document.createElement('div');
+  comfortTitle.className = 'ui-comfort-title';
+  const comfortValue = document.createElement('span');
+  comfortValue.className = 'ui-comfort-value';
+  comfortTitle.append(t('ui.comfort') + ' ', comfortValue);
+  const comfortBar = document.createElement('div');
+  comfortBar.className = 'ui-comfort-bar';
+  const comfortFill = document.createElement('div');
+  comfortFill.className = 'ui-comfort-fill';
+  comfortBar.appendChild(comfortFill);
+  comfortBox.append(comfortTitle, comfortBar);
+  document.body.appendChild(comfortBox);
 
   // Кнопки «Повернуть» и «Убрать» — отдельной строкой над панелью,
   // чтобы не уезжали при прокрутке ячеек на узких экранах
@@ -85,7 +101,15 @@ export function createUI({ t, items, onTake, onRotate, onReturn }) {
     toast.classList.add('flash');
   }
 
+  // Обновляет шкалу уюта (вызывается из game.js при каждой установке/снятии)
+  function setComfort(value) {
+    comfortValue.textContent = `${value} / ${maxComfort}`;
+    comfortFill.style.width = `${maxComfort > 0 ? Math.min(100, (value / maxComfort) * 100) : 0}%`;
+  }
+  setComfort(0);
+
   return {
+    setComfort,
     // Состояния: 'inSlot' — ничего в руке, 'placing' — предмет в руке, 'placed' — поставлен
     setState(state) {
       actions.hidden = state !== 'placing';
