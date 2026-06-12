@@ -28,12 +28,14 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   comfortBox.append(comfortTitle, comfortBar);
   document.body.appendChild(comfortBox);
 
-  // Весь нижний интерфейс — в одной колонке, чтобы кнопки действий всегда
-  // были НАД панелью предметов и не налезали на неё при любой высоте экрана.
+  // Кнопки действий и сворачивания — в правом верхнем углу (там пусто), чтобы
+  // не перекрывать низ комнаты, куда ставятся предметы. Внизу — только панель.
+  const top = document.createElement('div');
+  top.id = 'ui-top';
   const bottom = document.createElement('div');
   bottom.id = 'ui-bottom';
 
-  // Кнопки «Повернуть» и «Убрать» — отдельной строкой над панелью
+  // Кнопки «Повернуть» и «Убрать» — видны, только когда предмет «в руке»
   const actions = document.createElement('div');
   actions.id = 'ui-actions';
   const rotateBtn = document.createElement('button');
@@ -64,8 +66,9 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
     refreshToggle();
   });
 
-  bottom.append(actions, toggle, panel);
-  document.body.appendChild(bottom);
+  top.append(actions, toggle);
+  bottom.append(panel);
+  document.body.append(top, bottom);
   refreshToggle();
 
   const slots = new Map(); // id → { button, img, badge, count, enabled }
