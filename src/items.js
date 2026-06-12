@@ -9,6 +9,9 @@ import * as THREE from 'three';
 // Игра не ждёт текстур: положил файл в textures/ — материал «оделся» сам.
 function texturedMaterial(url, fallbackColor, warnName) {
   const material = new THREE.MeshLambertMaterial({ color: fallbackColor });
+  // Цвет для иконки в панели: там текстуру заменяем сплошным цветом (в 56px она
+  // читалась бы как шум), поэтому запоминаем родной цвет-заглушку материала.
+  material.userData.iconColor = fallbackColor;
   new THREE.TextureLoader().load(
     url,
     (texture) => {

@@ -23,15 +23,15 @@ export function renderItemIcon(buildFn, size = 128) {
   scene.add(dir);
 
   const model = buildFn();
-  // В 56 пикселях текстура дерева читается как шум — заменяем её сплошным цветом.
-  // Цветные материалы (обивка, экран, стекло) оставляем как есть.
+  // В 56 пикселях текстура читается как шум — заменяем её родным цветом-заглушкой
+  // материала (см. texturedMaterial в items.js). Цветные материалы без текстуры
+  // (обивка, экран, стекло) оставляем как есть.
   model.traverse((o) => {
-    if (o.isMesh) {
+    if (o.isMesh && o.material.map) {
+      const iconColor = o.material.userData.iconColor;
       o.material = o.material.clone();
-      if (o.material.map) {
-        o.material.map = null;
-        o.material.color.set(0x9c6b30);
-      }
+      o.material.map = null;
+      if (iconColor != null) o.material.color.set(iconColor);
     }
   });
   scene.add(model);
