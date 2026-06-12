@@ -15,7 +15,7 @@
     { "id": "wall_rug", "model": "wall_rug", "size": [3, 1], "comfort": 9, "placement": "wall", "count": 1 },
     { "id": "floor_lamp", "model": "floor_lamp", "size": [1, 1], "comfort": 6, "placement": "floor", "count": 1, "cordLength": 3 },
     { "id": "tape_player", "model": "tape_player", "size": [1, 1], "comfort": 4, "placement": "floor", "count": 1, "mountable": true, "cordLength": 2.5 },
-    { "id": "aquarium", "model": "aquarium", "size": [1, 1], "comfort": 8, "placement": "floor", "count": 1 },
+    { "id": "aquarium", "model": "aquarium", "size": [1, 1], "comfort": 8, "placement": "floor", "count": 1, "cordLength": 2 },
     { "id": "flower_pot", "model": "flower_pot", "size": [1, 1], "comfort": 3, "placement": "floor", "count": 1, "mountable": true }
   ]
 }

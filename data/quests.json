@@ -2,7 +2,7 @@
   "_comment": "Квесты v0.2. Тексты — в locales/<lang>.json по ключу quests.<id>. Активны первые 2 невыполненных (по порядку). Типы условий (src/quests.js): placed — предмет стоит; connected — прибор подключён; near — предмет a в maxDist клетках от b; nearWindow — предмет в maxDist от окна; nearWall — предмет в maxDist от стены; onRug — minCount предметов item стоят на ковре rug; seatsNear — у стола table минимум minCount посадочных мест (seats) в радиусе maxDist. reward: comfort — очки уюта, items — дополнительные предметы в панель.",
   "quests": [
     { "id": "mother_in_law", "type": "placed", "item": "bed", "reward": { "comfort": 4 } },
-    { "id": "aquarium_gift", "type": "near", "a": "aquarium", "b": "outlet", "maxDist": 2, "reward": { "comfort": 4 } },
+    { "id": "aquarium_gift", "type": "connected", "item": "aquarium", "reward": { "comfort": 4 } },
     { "id": "antenna", "type": "nearWindow", "item": "tv", "maxDist": 2, "reward": { "comfort": 5 } },
     { "id": "cold", "type": "placed", "item": "wall_rug", "reward": { "comfort": 4 } },
     { "id": "guests", "type": "seatsNear", "table": "table", "seats": ["stool", "armchair"], "minCount": 3, "maxDist": 2, "reward": { "comfort": 6, "items": [{ "id": "stool", "count": 1 }] } },

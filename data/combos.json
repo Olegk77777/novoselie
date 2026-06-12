@@ -4,6 +4,7 @@
     { "id": "tv_works", "type": "connected", "item": "tv", "bonus": 4 },
     { "id": "music", "type": "connected", "item": "tape_player", "bonus": 3 },
     { "id": "warm_light", "type": "connected", "item": "floor_lamp", "bonus": 4 },
+    { "id": "aquarium_works", "type": "connected", "item": "aquarium", "bonus": 4 },
     { "id": "tv_evenings", "type": "near", "a": "armchair", "b": "tv", "maxDist": 3, "bonus": 5 },
     { "id": "babushka", "type": "placed", "item": "wall_rug", "bonus": 6 },
     { "id": "cozy_corner", "type": "onRug", "item": "armchair", "rug": "floor_rug", "bonus": 4 }
