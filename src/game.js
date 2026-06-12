@@ -3,13 +3,13 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines } from './grid.js?v=16';
-import { createWalls, WALL_HEIGHT, getWallSurfaces } from './walls.js?v=16';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=16';
-import { MODEL_BUILDERS } from './items.js?v=16';
-import { createPlacement } from './placement.js?v=16';
-import { createUI } from './ui.js?v=16';
-import { renderItemIcon } from './icon.js?v=16';
+import { createFloor, createGridLines } from './grid.js?v=17';
+import { createWalls, WALL_HEIGHT, getWallSurfaces } from './walls.js?v=17';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=17';
+import { MODEL_BUILDERS } from './items.js?v=17';
+import { createPlacement } from './placement.js?v=17';
+import { createUI } from './ui.js?v=17';
+import { renderItemIcon } from './icon.js?v=17';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;

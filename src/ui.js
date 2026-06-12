@@ -66,8 +66,10 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
     refreshToggle();
   });
 
-  top.append(actions, toggle);
-  bottom.append(panel);
+  // Кнопки действий — вверху справа; кнопка «Свернуть» — внизу у своей панели,
+  // чтобы было понятно, что именно она сворачивает.
+  top.append(actions);
+  bottom.append(toggle, panel);
   document.body.append(top, bottom);
   refreshToggle();
 
