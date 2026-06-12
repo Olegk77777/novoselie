@@ -28,8 +28,12 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   comfortBox.append(comfortTitle, comfortBar);
   document.body.appendChild(comfortBox);
 
-  // Кнопки «Повернуть» и «Убрать» — отдельной строкой над панелью,
-  // чтобы не уезжали при прокрутке ячеек на узких экранах
+  // Весь нижний интерфейс — в одной колонке, чтобы кнопки действий всегда
+  // были НАД панелью предметов и не налезали на неё при любой высоте экрана.
+  const bottom = document.createElement('div');
+  bottom.id = 'ui-bottom';
+
+  // Кнопки «Повернуть» и «Убрать» — отдельной строкой над панелью
   const actions = document.createElement('div');
   actions.id = 'ui-actions';
   const rotateBtn = document.createElement('button');
@@ -40,14 +44,29 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   returnBtn.textContent = '⤓ ' + t('ui.to_slot') + hotkey('Esc');
   actions.append(rotateBtn, returnBtn);
   actions.hidden = true;
-  document.body.appendChild(actions);
   rotateBtn.addEventListener('click', onRotate);
   returnBtn.addEventListener('click', onReturn);
 
   // Панель с ячейками предметов
   const panel = document.createElement('div');
   panel.id = 'ui-panel';
-  document.body.appendChild(panel);
+
+  // Кнопка свернуть/развернуть панель предметов (больше места под комнату)
+  const toggle = document.createElement('button');
+  toggle.id = 'ui-toggle';
+  let collapsed = false;
+  function refreshToggle() {
+    toggle.textContent = collapsed ? '▴ ' + t('ui.show_items') : '▾ ' + t('ui.hide_items');
+    panel.classList.toggle('collapsed', collapsed);
+  }
+  toggle.addEventListener('click', () => {
+    collapsed = !collapsed;
+    refreshToggle();
+  });
+
+  bottom.append(actions, toggle, panel);
+  document.body.appendChild(bottom);
+  refreshToggle();
 
   const slots = new Map(); // id → { button, img, badge, count, enabled }
 
@@ -77,10 +96,7 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
     slots.set(item.id, slot);
 
     button.addEventListener('click', () => {
-      if (!slot.enabled) {
-        showHint(t('ui.hint_wall_soon'));
-        return;
-      }
+      if (!slot.enabled) return; // ячейка отключена (задел на будущее)
       if (slot.count > 0) onTake(item.id);
     });
     refreshSlot(slot);

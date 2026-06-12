@@ -15,17 +15,26 @@
       background: #1a1a2e;
     }
     canvas { display: block; }
-    /* Нижняя панель предметов (при нехватке места прокручивается по горизонтали) */
-    #ui-panel {
+    /* Весь нижний интерфейс — колонка по центру: кнопки действий, кнопка
+       сворачивания, панель предметов. Так кнопки всегда НАД панелью. */
+    #ui-bottom {
       position: fixed;
       bottom: 12px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      max-width: 96vw;
+    }
+    /* Панель предметов (при нехватке места прокручивается по горизонтали) */
+    #ui-panel {
+      display: flex;
       align-items: flex-start;
       gap: 8px;
       padding: 10px 12px;
-      max-width: 96vw;
+      max-width: 100%;
       overflow-x: auto;
       background: rgba(20, 20, 40, 0.85);
       border: 1px solid #4a4a6a;
@@ -33,6 +42,20 @@
       color: #f0e6d2;
       font-family: monospace;
       user-select: none;
+    }
+    #ui-panel.collapsed {
+      display: none;
+    }
+    /* Кнопка свернуть/развернуть панель */
+    #ui-toggle {
+      padding: 5px 16px;
+      background: rgba(20, 20, 40, 0.85);
+      border: 1px solid #4a4a6a;
+      border-radius: 8px;
+      color: #f0e6d2;
+      font-family: monospace;
+      font-size: 13px;
+      cursor: pointer;
     }
     .ui-slot-wrap {
       flex: 0 0 auto;
@@ -82,12 +105,8 @@
       margin-top: 3px;
       overflow-wrap: break-word;
     }
-    /* Кнопки действий — отдельной строкой над панелью */
+    /* Кнопки действий — отдельной строкой над панелью (в потоке #ui-bottom) */
     #ui-actions {
-      position: fixed;
-      bottom: 124px;
-      left: 50%;
-      transform: translateX(-50%);
       display: flex;
       gap: 10px;
     }
@@ -200,6 +219,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=12"></script>
+  <script type="module" src="src/game.js?v=13"></script>
 </body>
 </html>
