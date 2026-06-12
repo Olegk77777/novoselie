@@ -63,16 +63,45 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   function refreshToggle() {
     toggle.textContent = collapsed ? '▴ ' + t('ui.show_items') : '▾ ' + t('ui.hide_items');
     panel.classList.toggle('collapsed', collapsed);
+    updateArrows();
   }
   toggle.addEventListener('click', () => {
     collapsed = !collapsed;
     refreshToggle();
   });
 
+  // Обёртка панели со стрелками-индикаторами: показывают, что список длиннее
+  // экрана и его можно прокрутить. Кликом по стрелке — прокрутка.
+  const panelWrap = document.createElement('div');
+  panelWrap.id = 'ui-panel-wrap';
+  const leftArrow = document.createElement('button');
+  leftArrow.className = 'ui-scroll-arrow ui-scroll-left';
+  leftArrow.textContent = '‹';
+  leftArrow.hidden = true;
+  const rightArrow = document.createElement('button');
+  rightArrow.className = 'ui-scroll-arrow ui-scroll-right';
+  rightArrow.textContent = '›';
+  rightArrow.hidden = true;
+  panelWrap.append(panel, leftArrow, rightArrow);
+
+  // Показываем стрелку с той стороны, где есть ещё непоказанные предметы
+  function updateArrows() {
+    const maxScroll = panel.scrollWidth - panel.clientWidth;
+    const scrollable = !collapsed && maxScroll > 4;
+    leftArrow.hidden = !scrollable || panel.scrollLeft <= 2;
+    rightArrow.hidden = !scrollable || panel.scrollLeft >= maxScroll - 2;
+  }
+  panel.addEventListener('scroll', updateArrows);
+  // ResizeObserver надёжно ловит момент, когда панель обрела размер (первый показ),
+  // а также изменения окна — пересчитываем стрелки тогда же
+  new ResizeObserver(updateArrows).observe(panel);
+  leftArrow.addEventListener('click', () => panel.scrollBy({ left: -240, behavior: 'smooth' }));
+  rightArrow.addEventListener('click', () => panel.scrollBy({ left: 240, behavior: 'smooth' }));
+
   // Кнопки действий — вверху справа; кнопка «Свернуть» — внизу у своей панели,
   // чтобы было понятно, что именно она сворачивает.
   top.append(actions);
-  bottom.append(toggle, panel);
+  bottom.append(toggle, panelWrap);
   document.body.append(top, bottom);
   refreshToggle();
 
@@ -114,6 +143,9 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
     });
     refreshSlot(slot);
   }
+
+  // Панель наполнена ячейками — теперь её ширина известна, считаем стрелки
+  updateArrows();
 
   function refreshSlot(slot) {
     slot.button.classList.toggle('empty', slot.count === 0);

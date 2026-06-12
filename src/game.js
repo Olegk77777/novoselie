@@ -3,15 +3,15 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=19';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper } from './walls.js?v=19';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=19';
-import { MODEL_BUILDERS } from './items.js?v=19';
-import { createPlacement } from './placement.js?v=19';
-import { createUI } from './ui.js?v=19';
-import { renderItemIcon } from './icon.js?v=19';
-import { createPower } from './power.js?v=19';
-import { evaluateCombos } from './combos.js?v=19';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=20';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper } from './walls.js?v=20';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=20';
+import { MODEL_BUILDERS } from './items.js?v=20';
+import { createPlacement } from './placement.js?v=20';
+import { createUI } from './ui.js?v=20';
+import { renderItemIcon } from './icon.js?v=20';
+import { createPower } from './power.js?v=20';
+import { evaluateCombos } from './combos.js?v=20';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;

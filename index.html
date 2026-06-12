@@ -39,6 +39,11 @@
       gap: 8px;
       max-width: 96vw;
     }
+    /* Обёртка панели — для стрелок-индикаторов прокрутки по краям */
+    #ui-panel-wrap {
+      position: relative;
+      max-width: 100%;
+    }
     /* Панель предметов (при нехватке места прокручивается по горизонтали) */
     #ui-panel {
       display: flex;
@@ -53,8 +58,52 @@
       color: #f0e6d2;
       font-family: monospace;
       user-select: none;
+      scrollbar-width: auto;
+      scrollbar-color: #c9b88f rgba(0, 0, 0, 0.25);
     }
     #ui-panel.collapsed {
+      display: none;
+    }
+    /* Заметная полоса прокрутки (вместо тёмной, сливающейся с фоном) */
+    #ui-panel::-webkit-scrollbar {
+      height: 11px;
+    }
+    #ui-panel::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 6px;
+    }
+    #ui-panel::-webkit-scrollbar-thumb {
+      background: #c9b88f;
+      border-radius: 6px;
+      border: 1px solid #8a7a5a;
+    }
+    /* Стрелки-индикаторы прокрутки по краям панели */
+    .ui-scroll-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 34px;
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 34px;
+      font-weight: bold;
+      line-height: 1;
+      color: #1a1a2e;
+      background: rgba(240, 230, 210, 0.94);
+      border: 1px solid #b9a98a;
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 3;
+    }
+    .ui-scroll-left {
+      left: 6px;
+    }
+    .ui-scroll-right {
+      right: 6px;
+    }
+    .ui-scroll-arrow[hidden] {
       display: none;
     }
     /* Кнопка свернуть/развернуть панель */
@@ -243,6 +292,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=19"></script>
+  <script type="module" src="src/game.js?v=20"></script>
 </body>
 </html>
