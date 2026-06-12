@@ -6,12 +6,19 @@
 
 import * as THREE from 'three';
 
-// Создаёт плоскость пола размером cols × rows клеток
+// Создаёт плоскость пола. На старте игры пол — голый серый бетон;
+// паркет укладывается во время ремонта (applyParquet).
 export function createFloor(cols, rows) {
   const geometry = new THREE.PlaneGeometry(cols, rows);
-  // Цвет-заглушка: виден, пока текстура грузится (или если не загрузится)
-  const material = new THREE.MeshLambertMaterial({ color: 0x8a6a45 });
+  const material = new THREE.MeshLambertMaterial({ color: 0x8d8d86 }); // бетон
+  const floor = new THREE.Mesh(geometry, material);
+  // Плоскость по умолчанию стоит вертикально — кладём её горизонтально
+  floor.rotation.x = -Math.PI / 2;
+  return floor;
+}
 
+// Укладывает паркет на пол (вызывается при ремонте из game.js)
+export function applyParquet(floor, cols, rows) {
   new THREE.TextureLoader().load(
     'textures/floor_parquet.jpg',
     (texture) => {
@@ -20,19 +27,17 @@ export function createFloor(cols, rows) {
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.repeat.set(cols / 2, rows / 2);
-      material.map = texture;
-      // Белый цвет, чтобы заглушка не тонировала текстуру
-      material.color.set(0xffffff);
-      material.needsUpdate = true;
+      floor.material.map = texture;
+      floor.material.color.set(0xffffff); // белый, чтобы не тонировать текстуру
+      floor.material.needsUpdate = true;
     },
     undefined,
-    (err) => console.error('Не удалось загрузить текстуру пола:', err)
+    () => {
+      // Нет текстуры — хотя бы цвет дерева, чтобы было видно, что паркет уложен
+      floor.material.color.set(0x8a6a45);
+      console.warn('Текстура пола не найдена (textures/floor_parquet.jpg) — паркет цветом.');
+    }
   );
-
-  const floor = new THREE.Mesh(geometry, material);
-  // Плоскость по умолчанию стоит вертикально — кладём её горизонтально
-  floor.rotation.x = -Math.PI / 2;
-  return floor;
 }
 
 // Создаёт линии сетки поверх пола (cols × rows клеток)

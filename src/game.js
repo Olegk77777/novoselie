@@ -1,15 +1,17 @@
-// game.js — точка входа игры: сцена, изометрическая камера, рендер, главный цикл.
+// game.js — точка входа игры: сцена, камера, ремонт, расстановка, электричество, бонусы.
 
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines } from './grid.js?v=17';
-import { createWalls, WALL_HEIGHT, getWallSurfaces } from './walls.js?v=17';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=17';
-import { MODEL_BUILDERS } from './items.js?v=17';
-import { createPlacement } from './placement.js?v=17';
-import { createUI } from './ui.js?v=17';
-import { renderItemIcon } from './icon.js?v=17';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=19';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper } from './walls.js?v=19';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=19';
+import { MODEL_BUILDERS } from './items.js?v=19';
+import { createPlacement } from './placement.js?v=19';
+import { createUI } from './ui.js?v=19';
+import { renderItemIcon } from './icon.js?v=19';
+import { createPower } from './power.js?v=19';
+import { evaluateCombos } from './combos.js?v=19';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -18,8 +20,7 @@ const GRID_ROWS = 8;
 // Загружает словарь текстов (локализацию). В коде — только ключи, тексты — в JSON.
 async function loadLocale(lang) {
   try {
-    // cache: 'no-cache' — браузер каждый раз сверяет файл с сервером,
-    // иначе после обновления текстов может показать старую версию из кэша
+    // cache: 'no-cache' — браузер каждый раз сверяет файл с сервером
     const response = await fetch(`locales/${lang}.json`, { cache: 'no-cache' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
@@ -34,11 +35,11 @@ function t(dict, key) {
   return key.split('.').reduce((obj, part) => (obj ? obj[part] : undefined), dict) ?? key;
 }
 
-// Загружает список предметов из data/items.json
-async function loadItems() {
-  const response = await fetch('data/items.json', { cache: 'no-cache' });
-  if (!response.ok) throw new Error(`items.json: HTTP ${response.status}`);
-  return (await response.json()).items;
+// Загружает JSON-файл данных (предметы, бонусы)
+async function loadData(path) {
+  const response = await fetch(path, { cache: 'no-cache' });
+  if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+  return response.json();
 }
 
 // Показывает плашку с ошибкой, если игра не смогла запуститься
@@ -56,20 +57,21 @@ async function init() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x1a1a2e); // холодные сумерки за окном
 
-  // Изометрическая камера (модуль camera.js): сама вписывает комнату в экран.
+  // Изометрическая камера: сама вписывает комнату в экран
   const { camera, resize: resizeCamera, zoomBy } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
 
-  // Свет: тёплая "лампа" сверху + мягкая общая подсветка, чтобы тени не были чёрными
+  // Свет: тёплая "лампа" сверху + мягкая общая подсветка
   const lampLight = new THREE.DirectionalLight(0xffd9a0, 2.0);
   lampLight.position.set(5, 10, 3);
   scene.add(lampLight);
   scene.add(new THREE.AmbientLight(0x9090b0, 1.0));
 
-  // Пол, сетка и стены (пол сохраняем — по нему стреляет луч расстановки)
+  // Пол, сетка, стены. На старте — голый бетон: паркет и обои кладутся при ремонте.
   const floor = createFloor(GRID_COLS, GRID_ROWS);
   scene.add(floor);
   scene.add(createGridLines(GRID_COLS, GRID_ROWS));
-  scene.add(createWalls(GRID_COLS, GRID_ROWS));
+  const walls = createWalls(GRID_COLS, GRID_ROWS);
+  scene.add(walls);
 
   // Рендерер — рисует сцену в <canvas> на странице
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -80,8 +82,14 @@ async function init() {
   // Управление зумом: колесо мыши + щипок двумя пальцами на сенсоре
   attachZoomControls(renderer.domElement, zoomBy);
 
-  // Предметы из data/items.json: каждому — функция-строитель модели и иконка из неё
-  const records = await loadItems();
+  // Данные: предметы и бонусы за сочетания
+  const [itemsData, combosData] = await Promise.all([
+    loadData('data/items.json'),
+    loadData('data/combos.json'),
+  ]);
+  const records = itemsData.items;
+  const comboDefs = combosData.combos;
+
   const defs = new Map(); // id → описание предмета (с buildFn)
   const uiItems = [];
   for (const record of records) {
@@ -101,8 +109,58 @@ async function init() {
     });
   }
 
-  // Максимум уюта = сумма очков всех предметов набора (для шкалы)
-  const maxComfort = records.reduce((sum, r) => sum + (r.comfort || 0) * (r.count ?? 1), 0);
+  // Максимум уюта = предметы (с ремонтом и розетками) + все бонусы
+  const maxComfort =
+    records.reduce((sum, r) => sum + (r.comfort || 0) * (r.count ?? 1), 0) +
+    comboDefs.reduce((sum, c) => sum + c.bonus, 0);
+
+  // === Сводный уют: предметы + ремонт + бонусы ===
+  let placementComfort = 0; // очки поставленных предметов (считает placement.js)
+  let renoComfort = 0;      // очки за ремонт (паркет, обои)
+  let comboResults = [];    // текущие бонусы (combos.js)
+
+  function refreshComfort() {
+    const comboSum = comboResults.filter((c) => c.active).reduce((s, c) => s + c.bonus, 0);
+    ui.setComfort(placementComfort + renoComfort + comboSum);
+    ui.setCombos(comboResults);
+  }
+
+  // === Электричество и бонусы: пересчёт при каждом изменении расстановки ===
+  const power = createPower(scene);
+  let lastConnections = new Map(); // прибор → розетка
+  let lastLayout = [];
+
+  function recompute(placedItems) {
+    lastLayout = placedItems;
+    lastConnections = power.update(placedItems);
+    comboResults = evaluateCombos(comboDefs, placedItems, lastConnections);
+    refreshComfort();
+  }
+
+  // === Ремонт: пока не уложен паркет и не поклеены обои, мебель заблокирована ===
+  const furnitureIds = records.filter((r) => r.placement !== 'reno').map((r) => r.id);
+  const renoDone = { floor: false, walls: false };
+
+  function applyReno(def) {
+    if (def.applies === 'floor') {
+      applyParquet(floor, GRID_COLS, GRID_ROWS);
+      renoDone.floor = true;
+    } else {
+      applyWallpaper(walls);
+      renoDone.walls = true;
+    }
+    renoComfort += def.comfort || 0;
+    ui.changeCount(def.id, -1);
+    refreshComfort();
+    if (renoDone.floor && renoDone.walls) {
+      ui.setLocked(furnitureIds, false); // ремонт готов — мебель доступна
+      ui.showHint(t(locale, 'ui.hint_reno_done'));
+    } else {
+      ui.showHint(
+        t(locale, renoDone.floor ? 'ui.hint_reno_next_wallpaper' : 'ui.hint_reno_next_parquet')
+      );
+    }
+  }
 
   // Панель предметов и контроллер расстановки
   const ui = createUI({
@@ -110,9 +168,14 @@ async function init() {
     items: uiItems,
     maxComfort,
     onTake: (id) => {
+      const def = defs.get(id);
+      if (def.placement === 'reno') {
+        applyReno(def); // ремонт применяется сразу, в руку не берётся
+        return;
+      }
       if (placement.isPlacing()) return; // в руке уже есть предмет
       ui.changeCount(id, -1);
-      placement.startPlacing(defs.get(id));
+      placement.startPlacing(def);
     },
     onRotate: () => placement.rotate(),
     onReturn: () => placement.cancel(),
@@ -125,20 +188,39 @@ async function init() {
     cols: GRID_COLS,
     rows: GRID_ROWS,
     wallSurfaces: getWallSurfaces(GRID_COLS, GRID_ROWS),
+    onLayoutChange: recompute,
     onStateChange: (state, itemId) => {
       // Отмена — предмет возвращается в свою ячейку
       if (state === 'cancelled') {
         ui.changeCount(itemId, +1);
         ui.setState('inSlot');
-      } else if (state === 'placing' && defs.get(itemId)?.placement === 'wall') {
-        ui.setState('placingWall'); // у настенного — своя подсказка, без кнопки поворота
-      } else {
-        ui.setState(state);
+        return;
+      }
+      if (state === 'placing' && defs.get(itemId)?.placement === 'wall') {
+        ui.setState('placingWall'); // у настенного — своя подсказка, без поворота
+        return;
+      }
+      ui.setState(state);
+      // Поставили электроприбор — сразу говорим, заработал ли он
+      if (state === 'placed' && defs.get(itemId)?.cordLength) {
+        const sameId = lastLayout.filter((i) => i.userData.def.id === itemId);
+        const justPlaced = sameId[sameId.length - 1];
+        ui.showHint(
+          t(locale, lastConnections.has(justPlaced) ? 'ui.hint_connected' : 'ui.hint_no_outlet')
+        );
       }
     },
-    onComfortChange: (total) => ui.setComfort(total),
+    onComfortChange: (total) => {
+      placementComfort = total;
+      refreshComfort();
+    },
   });
+
+  // Стартовое состояние: голая комната, мебель под замком, подсказка про ремонт
   ui.setState('inSlot');
+  ui.setLocked(furnitureIds, true);
+  ui.showHint(t(locale, 'ui.hint_reno_start'));
+  refreshComfort();
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
   window.addEventListener('keydown', (e) => {

@@ -7,7 +7,7 @@ import * as THREE from 'three';
 // Высота стен в юнитах (1 клетка = 1 юнит). Экспортируется для вписывания камеры.
 export const WALL_HEIGHT = 2.5;
 const THICKNESS = 0.2; // толщина стен
-const PLASTER_COLOR = 0x9aa07a; // блёклая зелёная краска — заглушка, пока нет обоев
+const CONCRETE_COLOR = 0x8f8f88; // голая штукатурка — старт до ремонта
 // Один "лист" текстуры обоев покрывает квадрат 2×2 юнита
 const WALLPAPER_TILE = 2;
 
@@ -54,8 +54,8 @@ export function createWalls(cols, rows) {
   const halfW = cols / 2;
   const halfD = rows / 2;
 
-  // Общий материал стен; при загрузке обоев каждому сегменту выдадим свою копию текстуры
-  const wallMaterial = new THREE.MeshLambertMaterial({ color: PLASTER_COLOR });
+  // Общий материал стен; обои клеятся при ремонте (applyWallpaper)
+  const wallMaterial = new THREE.MeshLambertMaterial({ color: CONCRETE_COLOR });
 
   // Вспомогалка: добавляет кусок стены (бокс) с центром в (x, y, z).
   // texW/texH — размеры лицевой стороны, по ним потом считается повтор обоев.
@@ -125,15 +125,20 @@ export function createWalls(cols, rows) {
     DOOR.to - DOOR.from, WALL_HEIGHT - DOOR.top
   );
 
-  // Обои: грузим один раз, каждому сегменту — своя копия с повтором под его размер,
-  // чтобы узор был одного масштаба на кусках разной величины
+  return group;
+}
+
+// Клеит обои на стены (вызывается при ремонте из game.js).
+// Грузим текстуру один раз, каждому сегменту — своя копия с повтором под его
+// размер, чтобы узор был одного масштаба на кусках разной величины.
+export function applyWallpaper(wallsGroup) {
   new THREE.TextureLoader().load(
     'textures/wall_wallpaper.jpg',
     (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
-      group.children.forEach((mesh) => {
+      wallsGroup.children.forEach((mesh) => {
         if (!mesh.userData.wallpaper) return;
         const { texW, texH } = mesh.userData.wallpaper;
         const tex = texture.clone();
@@ -142,8 +147,12 @@ export function createWalls(cols, rows) {
       });
     },
     undefined,
-    () => console.warn('Текстура обоев не найдена (textures/wall_wallpaper.jpg) — стены пока цветом.')
+    () => {
+      // Нет текстуры — красим в тёплую краску, чтобы было видно, что ремонт сделан
+      wallsGroup.children.forEach((mesh) => {
+        if (mesh.userData.wallpaper) mesh.material = new THREE.MeshLambertMaterial({ color: 0x9aa07a });
+      });
+      console.warn('Текстура обоев не найдена (textures/wall_wallpaper.jpg) — стены краской.');
+    }
   );
-
-  return group;
 }

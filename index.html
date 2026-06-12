@@ -173,6 +173,14 @@
       background: linear-gradient(90deg, #c97f3d, #e8b96a);
       transition: width 0.4s ease; /* полоска растёт плавно */
     }
+    /* Список активных бонусов за сочетания — под полоской уюта */
+    .ui-combos {
+      margin-top: 6px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #e8d9b0;
+      max-width: 210px;
+    }
     /* Крупная подсказка-тост сверху экрана */
     #ui-hint-toast {
       position: fixed;
@@ -235,6 +243,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=17"></script>
+  <script type="module" src="src/game.js?v=19"></script>
 </body>
 </html>

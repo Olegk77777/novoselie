@@ -25,7 +25,10 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   const comfortFill = document.createElement('div');
   comfortFill.className = 'ui-comfort-fill';
   comfortBar.appendChild(comfortFill);
-  comfortBox.append(comfortTitle, comfortBar);
+  // Список активных бонусов за сочетания — под полоской уюта
+  const combosList = document.createElement('div');
+  combosList.className = 'ui-combos';
+  comfortBox.append(comfortTitle, comfortBar, combosList);
   document.body.appendChild(comfortBox);
 
   // Кнопки действий и сворачивания — в правом верхнем углу (там пусто), чтобы
@@ -97,10 +100,15 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
     wrap.append(button, label);
     panel.appendChild(wrap);
 
-    const slot = { button, img, badge, count: item.count, enabled: item.enabled };
+    const slot = { button, img, badge, count: item.count, enabled: item.enabled, locked: false };
     slots.set(item.id, slot);
 
     button.addEventListener('click', () => {
+      if (slot.locked) {
+        // Мебель заблокирована, пока не сделан ремонт
+        showHint(t('ui.hint_reno_first'));
+        return;
+      }
       if (!slot.enabled) return; // ячейка отключена (задел на будущее)
       if (slot.count > 0) onTake(item.id);
     });
@@ -109,7 +117,7 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
 
   function refreshSlot(slot) {
     slot.button.classList.toggle('empty', slot.count === 0);
-    slot.button.classList.toggle('disabled', !slot.enabled);
+    slot.button.classList.toggle('disabled', !slot.enabled || slot.locked);
     slot.badge.textContent = slot.count > 1 ? '×' + slot.count : '';
     slot.img.style.visibility = slot.count > 0 ? 'visible' : 'hidden';
   }
@@ -131,6 +139,27 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
 
   return {
     setComfort,
+    showHint,
+    // Обновляет список активных бонусов (results — из combos.js)
+    setCombos(results) {
+      combosList.textContent = '';
+      for (const combo of results) {
+        if (!combo.active) continue;
+        const line = document.createElement('div');
+        line.className = 'ui-combo-line';
+        line.textContent = `+${combo.bonus} · ${t('combos.' + combo.id)}`;
+        combosList.appendChild(line);
+      }
+    },
+    // Блокирует/разблокирует ячейки (мебель до окончания ремонта)
+    setLocked(ids, locked) {
+      for (const id of ids) {
+        const slot = slots.get(id);
+        if (!slot) continue;
+        slot.locked = locked;
+        refreshSlot(slot);
+      }
+    },
     // Состояния: 'inSlot' — ничего в руке, 'placing' — напольный предмет в руке,
     // 'placingWall' — настенный предмет в руке, 'placed' — поставлен
     setState(state) {

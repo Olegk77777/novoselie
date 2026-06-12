@@ -141,9 +141,37 @@ export function createFloorRug() {
 }
 
 // === Ковёр на стену 3×1.5: узор на всю площадь ===
+// ВАЖНО: настенные модели строим с центром в (0,0,0) — placement.js ставит
+// position.y = высота центра, и зона коллизий должна совпадать с картинкой.
 export function createWallRug() {
   const g = new THREE.Group();
-  g.add(box(2.7, 1.5, 0.05, rugPatternMaterial, 0, 0.75, 0));
+  g.add(box(2.7, 1.5, 0.05, rugPatternMaterial, 0, 0, 0));
+  return g;
+}
+
+// === Розетка (настенная, двойная): корпус + два тёмных гнезда ===
+export function createOutlet() {
+  const g = new THREE.Group();
+  g.add(box(0.26, 0.26, 0.06, lambert(0xe8e0cc), 0, 0, 0));
+  g.add(box(0.07, 0.07, 0.02, lambert(0x2a2a30), -0.06, 0, 0.035));
+  g.add(box(0.07, 0.07, 0.02, lambert(0x2a2a30), 0.06, 0, 0.035));
+  return g;
+}
+
+// === Иконки ремонта (в комнату не ставятся — применяются кликом) ===
+// Паркет: плашка дерева
+export function createRenoParquet() {
+  const g = new THREE.Group();
+  g.add(box(0.8, 0.08, 0.5, woodMaterial, 0, 0.04, 0));
+  g.add(box(0.74, 0.02, 0.44, lambert(0xb98a4e), 0, 0.09, 0));
+  return g;
+}
+
+// Обои: стоящий рулон
+export function createRenoWallpaper() {
+  const g = new THREE.Group();
+  g.add(box(0.26, 0.8, 0.26, lambert(0xd8cdb2), 0, 0.4, 0));
+  g.add(box(0.3, 0.1, 0.3, lambert(0xb05a40), 0, 0.62, 0));
   return g;
 }
 
@@ -203,4 +231,7 @@ export const MODEL_BUILDERS = {
   tape_player: createTapePlayer,
   aquarium: createAquarium,
   flower_pot: createFlowerPot,
+  outlet: createOutlet,
+  reno_parquet: createRenoParquet,
+  reno_wallpaper: createRenoWallpaper,
 };

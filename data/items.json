@@ -1,17 +1,20 @@
 {
-  "_comment": "Предметы игры. Поля: id — ключ (имя берётся из locales/<lang>.json по ключу items.<id>), model — функция-строитель из src/items.js, size — [ширина, глубина] в клетках, comfort — очки уюта, placement — floor|wall, layer — rug для ковров (мебель можно ставить поверх), count — сколько штук в стартовом наборе, surfaceHeight — высота столешницы (на предмет можно ставить mountable-предметы), mountable — предмет можно ставить на поверхности.",
+  "_comment": "Предметы игры. Поля: id — ключ (имя берётся из locales/<lang>.json по ключу items.<id>), model — функция-строитель из src/items.js, size — [ширина, глубина] в клетках, comfort — очки уюта, placement — floor|wall|reno (reno — ремонт: применяется кликом, не ставится), applies — для reno: floor|walls, layer — rug для ковров (мебель можно ставить поверх), count — сколько штук, surfaceHeight — высота столешницы (на предмет можно ставить mountable-предметы), mountable — ставится на поверхности, fixedWallHeight — настенный предмет висит только на этой высоте (розетка у пола), sockets — сколько приборов можно включить в розетку, cordLength — длина шнура прибора в клетках (прибор работает, если дотягивается до розетки со свободным гнездом).",
   "items": [
+    { "id": "reno_parquet", "model": "reno_parquet", "placement": "reno", "applies": "floor", "comfort": 5, "count": 1 },
+    { "id": "reno_wallpaper", "model": "reno_wallpaper", "placement": "reno", "applies": "walls", "comfort": 5, "count": 1 },
+    { "id": "outlet", "model": "outlet", "size": [1, 1], "comfort": 1, "placement": "wall", "count": 2, "fixedWallHeight": 0.3, "sockets": 2 },
     { "id": "bed", "model": "bed", "size": [1, 2], "comfort": 10, "placement": "floor", "count": 1 },
     { "id": "cupboard", "model": "cupboard", "size": [3, 1], "comfort": 12, "placement": "floor", "count": 1 },
     { "id": "table", "model": "table", "size": [2, 1], "comfort": 6, "placement": "floor", "count": 1, "surfaceHeight": 0.78 },
     { "id": "armchair", "model": "armchair", "size": [1, 1], "comfort": 5, "placement": "floor", "count": 2 },
     { "id": "stool", "model": "stool", "size": [1, 1], "comfort": 2, "placement": "floor", "count": 4, "surfaceHeight": 0.57 },
     { "id": "tv_stand", "model": "tv_stand", "size": [1, 1], "comfort": 3, "placement": "floor", "count": 1, "surfaceHeight": 0.42 },
-    { "id": "tv", "model": "tv", "size": [1, 1], "comfort": 6, "placement": "floor", "count": 1, "mountable": true },
+    { "id": "tv", "model": "tv", "size": [1, 1], "comfort": 6, "placement": "floor", "count": 1, "mountable": true, "cordLength": 2 },
     { "id": "floor_rug", "model": "floor_rug", "size": [3, 2], "comfort": 7, "placement": "floor", "layer": "rug", "count": 1 },
     { "id": "wall_rug", "model": "wall_rug", "size": [3, 1], "comfort": 9, "placement": "wall", "count": 1 },
-    { "id": "floor_lamp", "model": "floor_lamp", "size": [1, 1], "comfort": 6, "placement": "floor", "count": 1 },
-    { "id": "tape_player", "model": "tape_player", "size": [1, 1], "comfort": 4, "placement": "floor", "count": 1, "mountable": true },
+    { "id": "floor_lamp", "model": "floor_lamp", "size": [1, 1], "comfort": 6, "placement": "floor", "count": 1, "cordLength": 3 },
+    { "id": "tape_player", "model": "tape_player", "size": [1, 1], "comfort": 4, "placement": "floor", "count": 1, "mountable": true, "cordLength": 2.5 },
     { "id": "aquarium", "model": "aquarium", "size": [1, 1], "comfort": 8, "placement": "floor", "count": 1 },
     { "id": "flower_pot", "model": "flower_pot", "size": [1, 1], "comfort": 3, "placement": "floor", "count": 1 }
   ]
