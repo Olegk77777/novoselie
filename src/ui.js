@@ -12,7 +12,11 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   toast.id = 'ui-hint-toast';
   document.body.appendChild(toast);
 
-  // Шкала уюта (слева сверху): подпись, число и полоска-прогресс
+  // Левая колонка: шкала уюта + журнал заданий
+  const leftColumn = document.createElement('div');
+  leftColumn.id = 'ui-left';
+
+  // Шкала уюта: подпись, число и полоска-прогресс
   const comfortBox = document.createElement('div');
   comfortBox.id = 'ui-comfort';
   const comfortTitle = document.createElement('div');
@@ -29,7 +33,19 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   const combosList = document.createElement('div');
   combosList.className = 'ui-combos';
   comfortBox.append(comfortTitle, comfortBar, combosList);
-  document.body.appendChild(comfortBox);
+
+  // Журнал заданий: заголовок со счётчиком и список активных квестов
+  const questsBox = document.createElement('div');
+  questsBox.id = 'ui-quests';
+  questsBox.hidden = true; // появится, когда game.js передаст квесты
+  const questsTitle = document.createElement('div');
+  questsTitle.className = 'ui-quests-title';
+  const questsList = document.createElement('div');
+  questsList.className = 'ui-quests-list';
+  questsBox.append(questsTitle, questsList);
+
+  leftColumn.append(comfortBox, questsBox);
+  document.body.appendChild(leftColumn);
 
   // Кнопки действий и сворачивания — в правом верхнем углу (там пусто), чтобы
   // не перекрывать низ комнаты, куда ставятся предметы. Внизу — только панель.
@@ -181,6 +197,21 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
         line.className = 'ui-combo-line';
         line.textContent = `+${combo.bonus} · ${t('combos.' + combo.id)}`;
         combosList.appendChild(line);
+      }
+    },
+    // Обновляет журнал заданий. quests — [{ title, done }], активные показываются
+    // списком, выполненные считаются в заголовке: «Задания 3/10».
+    setQuests(quests) {
+      questsBox.hidden = quests.length === 0;
+      const doneCount = quests.filter((q) => q.done).length;
+      questsTitle.textContent = `${t('ui.quests_title')} ${doneCount}/${quests.length}`;
+      questsList.textContent = '';
+      for (const quest of quests) {
+        if (quest.done || !quest.active) continue;
+        const line = document.createElement('div');
+        line.className = 'ui-quest-line';
+        line.textContent = '• ' + quest.title;
+        questsList.appendChild(line);
       }
     },
     // Блокирует/разблокирует ячейки (мебель до окончания ремонта)

@@ -3,15 +3,16 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=20';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper } from './walls.js?v=20';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=20';
-import { MODEL_BUILDERS } from './items.js?v=20';
-import { createPlacement } from './placement.js?v=20';
-import { createUI } from './ui.js?v=20';
-import { renderItemIcon } from './icon.js?v=20';
-import { createPower } from './power.js?v=20';
-import { evaluateCombos } from './combos.js?v=20';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=21';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper } from './walls.js?v=21';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=21';
+import { MODEL_BUILDERS } from './items.js?v=21';
+import { createPlacement } from './placement.js?v=21';
+import { createUI } from './ui.js?v=21';
+import { renderItemIcon } from './icon.js?v=21';
+import { createPower } from './power.js?v=21';
+import { evaluateCombos } from './combos.js?v=21';
+import { isQuestDone } from './quests.js?v=21';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -82,13 +83,15 @@ async function init() {
   // Управление зумом: колесо мыши + щипок двумя пальцами на сенсоре
   attachZoomControls(renderer.domElement, zoomBy);
 
-  // Данные: предметы и бонусы за сочетания
-  const [itemsData, combosData] = await Promise.all([
+  // Данные: предметы, бонусы за сочетания, квесты
+  const [itemsData, combosData, questsData] = await Promise.all([
     loadData('data/items.json'),
     loadData('data/combos.json'),
+    loadData('data/quests.json'),
   ]);
   const records = itemsData.items;
   const comboDefs = combosData.combos;
+  const questDefs = questsData.quests;
 
   const defs = new Map(); // id → описание предмета (с buildFn)
   const uiItems = [];
@@ -109,23 +112,80 @@ async function init() {
     });
   }
 
-  // Максимум уюта = предметы (с ремонтом и розетками) + все бонусы
+  // Очки уюта предмета по id (для подсчёта максимума с наградами квестов)
+  const comfortOf = (id) => records.find((r) => r.id === id)?.comfort || 0;
+
+  // Максимум уюта = предметы + бонусы + награды квестов (очки и предметы)
   const maxComfort =
     records.reduce((sum, r) => sum + (r.comfort || 0) * (r.count ?? 1), 0) +
-    comboDefs.reduce((sum, c) => sum + c.bonus, 0);
+    comboDefs.reduce((sum, c) => sum + c.bonus, 0) +
+    questDefs.reduce(
+      (sum, q) =>
+        sum +
+        (q.reward?.comfort || 0) +
+        (q.reward?.items || []).reduce((s, it) => s + comfortOf(it.id) * it.count, 0),
+      0
+    );
 
-  // === Сводный уют: предметы + ремонт + бонусы ===
+  // === Сводный уют: предметы + ремонт + бонусы + квесты ===
   let placementComfort = 0; // очки поставленных предметов (считает placement.js)
   let renoComfort = 0;      // очки за ремонт (паркет, обои)
+  let questComfort = 0;     // очки-награды за выполненные квесты
   let comboResults = [];    // текущие бонусы (combos.js)
 
   function refreshComfort() {
     const comboSum = comboResults.filter((c) => c.active).reduce((s, c) => s + c.bonus, 0);
-    ui.setComfort(placementComfort + renoComfort + comboSum);
+    ui.setComfort(placementComfort + renoComfort + questComfort + comboSum);
     ui.setCombos(comboResults);
   }
 
-  // === Электричество и бонусы: пересчёт при каждом изменении расстановки ===
+  // === Квесты: активны первые 2 невыполненных, выполнение — навсегда ===
+  const QUESTS_ACTIVE_LIMIT = 2;
+  const questState = questDefs.map((def) => ({ def, done: false }));
+  const wallSurfaces = getWallSurfaces(GRID_COLS, GRID_ROWS);
+  // Окно — вырез дальней стены (для условий «у окна»)
+  const windowCutout = wallSurfaces[0].cutouts[0];
+  const questCtx = (placedItems, connections) => ({
+    placedItems,
+    connections,
+    windowSeg: { alongMin: windowCutout.alongMin, alongMax: windowCutout.alongMax, z: wallSurfaces[0].plane },
+    // Расстояние до ближайшей из двух наших стен (x=-cols/2 и z=-rows/2)
+    wallDist: (item) => Math.min(item.position.x + GRID_COLS / 2, item.position.z + GRID_ROWS / 2),
+  });
+
+  function refreshQuestsUI() {
+    const pending = questState.filter((q) => !q.done).slice(0, QUESTS_ACTIVE_LIMIT);
+    ui.setQuests(
+      questState.map((q) => ({
+        title: t(locale, `quests.${q.def.id}`),
+        done: q.done,
+        active: pending.includes(q),
+      }))
+    );
+  }
+
+  function checkQuests(placedItems, connections) {
+    const ctx = questCtx(placedItems, connections);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const active = questState.filter((q) => !q.done).slice(0, QUESTS_ACTIVE_LIMIT);
+      for (const quest of active) {
+        if (!isQuestDone(quest.def, ctx)) continue;
+        quest.done = true;
+        changed = true; // следующий квест мог тоже сразу выполниться
+        questComfort += quest.def.reward?.comfort || 0;
+        for (const it of quest.def.reward?.items || []) ui.changeCount(it.id, it.count);
+        const message = `${t(locale, 'ui.hint_quest_done')} ${t(locale, `quests.${quest.def.id}`)}`;
+        const allDone = questState.every((q) => q.done);
+        // Тост показываем после хинтов установки (они приходят в этом же тике)
+        setTimeout(() => ui.showHint(allDone ? t(locale, 'ui.quests_all_done') : message), 60);
+      }
+    }
+    refreshQuestsUI();
+  }
+
+  // === Электричество, бонусы, квесты: пересчёт при изменении расстановки ===
   const power = createPower(scene);
   let lastConnections = new Map(); // прибор → розетка
   let lastLayout = [];
@@ -134,6 +194,7 @@ async function init() {
     lastLayout = placedItems;
     lastConnections = power.update(placedItems);
     comboResults = evaluateCombos(comboDefs, placedItems, lastConnections);
+    checkQuests(placedItems, lastConnections);
     refreshComfort();
   }
 
@@ -187,7 +248,7 @@ async function init() {
     floor,
     cols: GRID_COLS,
     rows: GRID_ROWS,
-    wallSurfaces: getWallSurfaces(GRID_COLS, GRID_ROWS),
+    wallSurfaces,
     onLayoutChange: recompute,
     onStateChange: (state, itemId) => {
       // Отмена — предмет возвращается в свою ячейку
@@ -220,6 +281,7 @@ async function init() {
   ui.setState('inSlot');
   ui.setLocked(furnitureIds, true);
   ui.showHint(t(locale, 'ui.hint_reno_start'));
+  refreshQuestsUI();
   refreshComfort();
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
