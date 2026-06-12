@@ -129,19 +129,18 @@ export function createTV() {
   return g;
 }
 
-// === Ковёр на пол 3×2: плоский, мебель можно ставить сверху (layer: rug) ===
+// === Ковёр на пол 3×2: узор на всю площадь, мебель можно ставить сверху (layer: rug) ===
+// Текстура rug_pattern уже содержит кайму — натягиваем на весь ковёр, без подложки.
 export function createFloorRug() {
   const g = new THREE.Group();
-  g.add(box(2.86, 0.04, 1.86, lambert(COLORS.rug), 0, 0.02, 0));
-  g.add(box(2.5, 0.02, 1.5, rugPatternMaterial, 0, 0.045, 0));
+  g.add(box(2.9, 0.05, 1.9, rugPatternMaterial, 0, 0.025, 0));
   return g;
 }
 
-// === Ковёр на стену 3×1 (повесим в следующем обновлении, модель готова) ===
+// === Ковёр на стену 3×1.5: узор на всю площадь ===
 export function createWallRug() {
   const g = new THREE.Group();
-  g.add(box(2.7, 1.5, 0.05, lambert(COLORS.rug), 0, 0.75, 0));
-  g.add(box(2.3, 1.1, 0.03, rugPatternMaterial, 0, 0.75, 0.02));
+  g.add(box(2.7, 1.5, 0.05, rugPatternMaterial, 0, 0.75, 0));
   return g;
 }
 
