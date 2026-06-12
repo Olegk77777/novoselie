@@ -48,23 +48,24 @@
     }
     /* Кнопка свернуть/развернуть панель */
     #ui-toggle {
-      padding: 5px 16px;
-      background: rgba(20, 20, 40, 0.85);
-      border: 1px solid #4a4a6a;
+      padding: 8px 20px;
+      background: #f0e6d2;
+      border: 1px solid #b9a98a;
       border-radius: 8px;
-      color: #f0e6d2;
+      color: #1a1a2e;
       font-family: monospace;
-      font-size: 13px;
+      font-size: 15px;
+      font-weight: bold;
       cursor: pointer;
     }
     .ui-slot-wrap {
       flex: 0 0 auto;
-      width: 64px;
+      width: 88px;
     }
     .ui-slot {
       position: relative;
-      width: 56px;
-      height: 56px;
+      width: 76px;
+      height: 76px;
       margin: 0 auto;
       display: block;
       background: #2d2d44;
@@ -72,7 +73,7 @@
       border-radius: 6px;
       cursor: pointer;
       color: inherit;
-      padding: 2px;
+      padding: 3px;
     }
     .ui-slot.empty {
       opacity: 0.35;
@@ -91,18 +92,19 @@
     }
     .ui-slot-badge {
       position: absolute;
-      top: 1px;
-      right: 1px;
-      font-size: 11px;
-      padding: 0 3px;
-      background: rgba(10, 10, 20, 0.75);
+      top: 2px;
+      right: 2px;
+      font-size: 14px;
+      font-weight: bold;
+      padding: 1px 5px;
+      background: rgba(10, 10, 20, 0.8);
       border-radius: 4px;
       pointer-events: none;
     }
     .ui-slot-label {
-      font-size: 10px;
+      font-size: 13px;
       text-align: center;
-      margin-top: 3px;
+      margin-top: 4px;
       overflow-wrap: break-word;
     }
     /* Кнопки действий — отдельной строкой над панелью (в потоке #ui-bottom) */
@@ -115,13 +117,14 @@
       display: none;
     }
     .ui-btn {
-      padding: 12px 16px;
-      background: #2d2d44;
-      border: 1px solid #6a6a8a;
+      padding: 13px 20px;
+      background: #f0e6d2;
+      border: 1px solid #b9a98a;
       border-radius: 6px;
-      color: inherit;
+      color: #1a1a2e;
       font-family: inherit;
-      font-size: 14px;
+      font-size: 16px;
+      font-weight: bold;
       cursor: pointer;
     }
     /* Шкала уюта слева сверху */
