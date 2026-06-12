@@ -3,13 +3,13 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines } from './grid.js?v=8';
-import { createWalls, WALL_HEIGHT } from './walls.js?v=8';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=8';
-import { MODEL_BUILDERS } from './items.js?v=8';
-import { createPlacement } from './placement.js?v=8';
-import { createUI } from './ui.js?v=8';
-import { renderItemIcon } from './icon.js?v=8';
+import { createFloor, createGridLines } from './grid.js?v=12';
+import { createWalls, WALL_HEIGHT, getWallSurfaces } from './walls.js?v=12';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=12';
+import { MODEL_BUILDERS } from './items.js?v=12';
+import { createPlacement } from './placement.js?v=12';
+import { createUI } from './ui.js?v=12';
+import { renderItemIcon } from './icon.js?v=12';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -97,15 +97,12 @@ async function init() {
       name: t(locale, `items.${def.id}`),
       iconUrl: renderItemIcon(buildFn),
       count: def.count ?? 1,
-      // Настенные предметы пока нельзя ставить — повесим в отдельном шаге
-      enabled: def.placement !== 'wall',
+      enabled: true,
     });
   }
 
-  // Максимум уюта = сумма очков всех доступных предметов (для шкалы)
-  const maxComfort = records
-    .filter((r) => r.placement !== 'wall')
-    .reduce((sum, r) => sum + (r.comfort || 0) * (r.count ?? 1), 0);
+  // Максимум уюта = сумма очков всех предметов набора (для шкалы)
+  const maxComfort = records.reduce((sum, r) => sum + (r.comfort || 0) * (r.count ?? 1), 0);
 
   // Панель предметов и контроллер расстановки
   const ui = createUI({
@@ -127,11 +124,14 @@ async function init() {
     floor,
     cols: GRID_COLS,
     rows: GRID_ROWS,
+    wallSurfaces: getWallSurfaces(GRID_COLS, GRID_ROWS),
     onStateChange: (state, itemId) => {
       // Отмена — предмет возвращается в свою ячейку
       if (state === 'cancelled') {
         ui.changeCount(itemId, +1);
         ui.setState('inSlot');
+      } else if (state === 'placing' && defs.get(itemId)?.placement === 'wall') {
+        ui.setState('placingWall'); // у настенного — своя подсказка, без кнопки поворота
       } else {
         ui.setState(state);
       }

@@ -110,11 +110,16 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
 
   return {
     setComfort,
-    // Состояния: 'inSlot' — ничего в руке, 'placing' — предмет в руке, 'placed' — поставлен
+    // Состояния: 'inSlot' — ничего в руке, 'placing' — напольный предмет в руке,
+    // 'placingWall' — настенный предмет в руке, 'placed' — поставлен
     setState(state) {
-      actions.hidden = state !== 'placing';
+      const placing = state === 'placing' || state === 'placingWall';
+      actions.hidden = !placing;
+      // Настенный предмет висит плоско — кнопку поворота прячем
+      rotateBtn.style.display = state === 'placingWall' ? 'none' : '';
       if (state === 'inSlot') showHint(t('ui.hint_take'));
       else if (state === 'placing') showHint(t('ui.hint_place'));
+      else if (state === 'placingWall') showHint(t('ui.hint_place_wall'));
       else showHint(t('ui.hint_pickup'));
     },
     // Изменить количество предмета в ячейке (взяли из ячейки −1, вернули +1)

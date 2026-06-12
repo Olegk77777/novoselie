@@ -18,6 +18,36 @@ const WINDOW = { from: -1.5, to: 1.5, bottom: 0.8, top: 2.1 };
 // вставали ровно по центру входа.
 const DOOR = { from: 1.25, to: 2.75, top: 2.1 };
 
+// Описание лицевых поверхностей стен — для размещения настенных предметов (placement.js).
+// Координата "along" — положение вдоль стены, "h" — высота от пола.
+// cutouts — вырезы (окно, дверь), куда вешать нельзя.
+export function getWallSurfaces(cols, rows) {
+  const halfW = cols / 2;
+  const halfD = rows / 2;
+  return [
+    {
+      id: 'back',          // дальняя стена, идёт вдоль X
+      axis: 'x',           // "along" откладывается по мировой оси X
+      normalAxis: 'z',     // нормаль (внутрь комнаты) — по оси Z
+      plane: -halfD,       // координата лицевой поверхности по нормали
+      alongMin: -halfW, alongMax: halfW,
+      heightMax: WALL_HEIGHT,
+      rotationY: 0,        // поворот модели, чтобы лечь на эту стену
+      cutouts: [{ alongMin: WINDOW.from, alongMax: WINDOW.to, hMin: WINDOW.bottom, hMax: WINDOW.top }],
+    },
+    {
+      id: 'left',          // левая стена, идёт вдоль Z
+      axis: 'z',
+      normalAxis: 'x',
+      plane: -halfW,
+      alongMin: -halfD, alongMax: halfD,
+      heightMax: WALL_HEIGHT,
+      rotationY: Math.PI / 2,
+      cutouts: [{ alongMin: DOOR.from, alongMax: DOOR.to, hMin: 0, hMax: DOOR.top }],
+    },
+  ];
+}
+
 // Создаёт обе стены, окно и проём; возвращает группу для добавления в сцену
 export function createWalls(cols, rows) {
   const group = new THREE.Group();
