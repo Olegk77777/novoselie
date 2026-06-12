@@ -5,20 +5,30 @@
 
 import * as THREE from 'three';
 
-// Общий материал «светлое дерево» для деревянной мебели.
-// Пока текстуры нет — цвет-заглушка; волокна на текстуре делают заметным поворот.
-const woodMaterial = new THREE.MeshLambertMaterial({ color: 0x9c6b30 });
-new THREE.TextureLoader().load(
-  'textures/wood_light.jpg',
-  (texture) => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    woodMaterial.map = texture;
-    woodMaterial.color.set(0xffffff); // белый, чтобы не тонировать текстуру
-    woodMaterial.needsUpdate = true;
-  },
-  undefined,
-  () => console.warn('Текстура дерева не найдена (textures/wood_light.jpg) — мебель пока цветом.')
-);
+// Общий материал с текстурой, если файл есть, и цветом-заглушкой, если нет.
+// Игра не ждёт текстур: положил файл в textures/ — материал «оделся» сам.
+function texturedMaterial(url, fallbackColor, warnName) {
+  const material = new THREE.MeshLambertMaterial({ color: fallbackColor });
+  new THREE.TextureLoader().load(
+    url,
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      material.map = texture;
+      material.color.set(0xffffff); // белый, чтобы не тонировать текстуру
+      material.needsUpdate = true;
+    },
+    undefined,
+    () => console.warn(`Текстура не найдена (${url}) — ${warnName} пока цветом.`)
+  );
+  return material;
+}
+
+// Общие материалы мебели (текстуры волокон/фактуры делают заметным и поворот)
+const woodMaterial = texturedMaterial('textures/wood_light.jpg', 0x9c6b30, 'дерево');
+const plasticMaterial = texturedMaterial('textures/plastic_dark.jpg', 0x35353c, 'пластик');
+const metalMaterial = texturedMaterial('textures/metal_brushed.jpg', 0x8a8c94, 'металл');
+// Узор ковра: маппится на верх ковра один-в-один (не повторяется)
+const rugPatternMaterial = texturedMaterial('textures/rug_pattern.jpg', 0xb05a40, 'узор ковра');
 
 // Палитра остальных материалов (советские приглушённые тона)
 const COLORS = {
@@ -104,12 +114,18 @@ export function createCupboard() {
   return g;
 }
 
-// === Телевизор на тумбе 1×1 ===
-export function createTV() {
+// === Тумба под ТВ 1×1 (поверхность: на неё можно ставить телевизор/магнитофон) ===
+export function createTVStand() {
   const g = new THREE.Group();
   g.add(box(0.8, 0.42, 0.56, woodMaterial, 0, 0.21, 0));
-  g.add(box(0.6, 0.46, 0.44, lambert(COLORS.dark), 0, 0.65, 0));
-  g.add(box(0.48, 0.34, 0.03, lambert(COLORS.screen, { emissive: 0x101c30 }), 0, 0.66, 0.235));
+  return g;
+}
+
+// === Телевизор 1×1 (низ на y=0 — может стоять на полу или на поверхности) ===
+export function createTV() {
+  const g = new THREE.Group();
+  g.add(box(0.6, 0.46, 0.44, plasticMaterial, 0, 0.23, 0));
+  g.add(box(0.48, 0.34, 0.03, lambert(COLORS.screen, { emissive: 0x101c30 }), 0, 0.24, 0.235));
   return g;
 }
 
@@ -117,7 +133,7 @@ export function createTV() {
 export function createFloorRug() {
   const g = new THREE.Group();
   g.add(box(2.86, 0.04, 1.86, lambert(COLORS.rug), 0, 0.02, 0));
-  g.add(box(2.5, 0.02, 1.5, lambert(COLORS.rugBorder), 0, 0.045, 0));
+  g.add(box(2.5, 0.02, 1.5, rugPatternMaterial, 0, 0.045, 0));
   return g;
 }
 
@@ -125,23 +141,23 @@ export function createFloorRug() {
 export function createWallRug() {
   const g = new THREE.Group();
   g.add(box(2.7, 1.5, 0.05, lambert(COLORS.rug), 0, 0.75, 0));
-  g.add(box(2.3, 1.1, 0.03, lambert(COLORS.rugBorder), 0, 0.75, 0.02));
+  g.add(box(2.3, 1.1, 0.03, rugPatternMaterial, 0, 0.75, 0.02));
   return g;
 }
 
-// === Торшер 1×1: основание, стойка, абажур ===
+// === Торшер 1×1: основание, металлическая стойка, абажур ===
 export function createFloorLamp() {
   const g = new THREE.Group();
-  g.add(box(0.4, 0.06, 0.4, lambert(COLORS.dark), 0, 0.03, 0));
-  g.add(box(0.06, 1.32, 0.06, lambert(COLORS.metal), 0, 0.72, 0));
+  g.add(box(0.4, 0.06, 0.4, plasticMaterial, 0, 0.03, 0));
+  g.add(box(0.06, 1.32, 0.06, metalMaterial, 0, 0.72, 0));
   g.add(box(0.46, 0.34, 0.46, lambert(COLORS.lampshade, { emissive: 0x6a4a20 }), 0, 1.52, 0));
   return g;
 }
 
-// === Кассетный магнитофон 1×1 ===
+// === Кассетный магнитофон 1×1 (низ на y=0 — пол или поверхность) ===
 export function createTapePlayer() {
   const g = new THREE.Group();
-  g.add(box(0.66, 0.22, 0.34, lambert(COLORS.dark), 0, 0.11, 0));
+  g.add(box(0.66, 0.22, 0.34, plasticMaterial, 0, 0.11, 0));
   g.add(box(0.56, 0.14, 0.03, lambert(COLORS.panel), 0, 0.12, 0.18));
   g.add(box(0.1, 0.1, 0.02, lambert(0x222228), -0.15, 0.12, 0.2));
   g.add(box(0.1, 0.1, 0.02, lambert(0x222228), 0.15, 0.12, 0.2));
@@ -178,6 +194,7 @@ export const MODEL_BUILDERS = {
   table: createTable,
   cupboard: createCupboard,
   tv: createTV,
+  tv_stand: createTVStand,
   floor_rug: createFloorRug,
   wall_rug: createWallRug,
   floor_lamp: createFloorLamp,

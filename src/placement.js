@@ -1,7 +1,12 @@
-// placement.js — расстановка предметов: взять, водить призрак по клеткам,
-// поставить (предмет может занимать несколько клеток), повернуть на 90°, забрать кликом.
+// placement.js — расстановка предметов: взять, водить призрак, поставить, повернуть, забрать.
+// Шаг перемещения — ПОЛклетки (0.5 юнита): можно ставить табурет по центру стола и т.п.
+// Поворот — шагами по 45°: предметы можно ставить по диагонали.
+// Предметы с surfaceHeight — «поверхности»: на них можно ставить mountable-предметы
+// (магнитофон на табурет/стол/тумбу, телевизор на тумбу).
 
 import * as THREE from 'three';
+
+const SUB = 2; // подклеток в одной клетке (2 = шаг в полклетки)
 
 // Создаёт контроллер расстановки.
 // onStateChange(state, itemId): 'placing' | 'placed' | 'cancelled'
@@ -9,23 +14,26 @@ import * as THREE from 'three';
 export function createPlacement({ scene, camera, canvas, floor, cols, rows, onStateChange, onComfortChange }) {
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
-  // Два слоя занятости: мебель и ковры. Ковёр не занимает клетки мебели,
-  // поэтому кресло можно поставить ПОВЕРХ ковра (нужно для квестов v0.2).
+  const subCols = cols * SUB;
+  const subRows = rows * SUB;
+  // Два слоя занятости (в подклетках): мебель и ковры. Ковёр не занимает клетки
+  // мебели, поэтому кресло можно поставить ПОВЕРХ ковра (нужно для квестов v0.2).
   const occupied = { furniture: new Set(), rug: new Set() };
   const placedItems = [];   // поставленные предметы (группы)
 
   let ghost = null;          // полупрозрачный предмет «в руке»
-  let def = null;            // описание предмета из items.json (id, size, layer, buildFn)
-  let rotationSteps = 0;     // 0..3 — повороты на 90°
+  let def = null;            // описание предмета из items.json (id, size, layer, buildFn...)
+  let rotationSteps = 0;     // 0..7 — повороты по 45°
   let targetRotY = 0;        // угол, к которому призрак плавно доворачивается
-  let currentAnchor = null;  // левая верхняя клетка прямоугольника предмета
+  let currentAnchor = null;  // левая верхняя ПОДклетка прямоугольника предмета
+  let mountTarget = null;    // поверхность под курсором, на которую сядет предмет
 
   // Защита от случайной установки во время пинч-зума двумя пальцами
   const pointers = new Set();
   let pinchActive = false;
 
   const layerOf = (d) => (d.layer === 'rug' ? 'rug' : 'furniture');
-  const keyOf = (col, row) => `${col},${row}`;
+  const keyOf = (sc, sr) => `${sc},${sr}`;
 
   // Пересчитать уют по всем поставленным предметам и сообщить наружу
   function reportComfort() {
@@ -33,28 +41,35 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     onComfortChange(total);
   }
 
-  // Габариты в клетках с учётом поворота (90°/270° меняют ширину и глубину местами)
-  function footprint(steps) {
+  // Габариты в ПОДклетках с учётом поворота. Для диагональных углов (45°, 135°...)
+  // берём описанный прямоугольник (AABB) повёрнутого предмета, округляя вверх:
+  // лучше заблокировать чуть больше места, чем позволить предметам налезть друг на друга.
+  function footprintSub(steps) {
     const [w, d] = def.size;
-    return steps % 2 === 1 ? { w: d, d: w } : { w, d };
-  }
-
-  // Якорная клетка (левый верхний угол) так, чтобы курсор был у центра предмета.
-  // Зажимается в границы комнаты — предмет не вылезет за пол.
-  function anchorFromCell(cell, steps) {
-    const fp = footprint(steps);
+    const theta = (steps * Math.PI) / 4;
+    const cos = Math.abs(Math.cos(theta));
+    const sin = Math.abs(Math.sin(theta));
     return {
-      col: THREE.MathUtils.clamp(cell.col - Math.floor((fp.w - 1) / 2), 0, cols - fp.w),
-      row: THREE.MathUtils.clamp(cell.row - Math.floor((fp.d - 1) / 2), 0, rows - fp.d),
+      w: Math.max(1, Math.ceil((w * cos + d * sin) * SUB - 1e-6)),
+      d: Math.max(1, Math.ceil((w * sin + d * cos) * SUB - 1e-6)),
     };
   }
 
-  // Все клетки, которые предмет накрывает из якорной
+  // Якорная подклетка так, чтобы курсор был у центра предмета; зажата в границы пола
+  function anchorFromSub(sub, steps) {
+    const fp = footprintSub(steps);
+    return {
+      sc: THREE.MathUtils.clamp(sub.sc - Math.floor((fp.w - 1) / 2), 0, subCols - fp.w),
+      sr: THREE.MathUtils.clamp(sub.sr - Math.floor((fp.d - 1) / 2), 0, subRows - fp.d),
+    };
+  }
+
+  // Все подклетки, которые предмет накрывает из якорной
   function coveredKeys(anchor, steps) {
-    const fp = footprint(steps);
+    const fp = footprintSub(steps);
     const keys = [];
-    for (let c = anchor.col; c < anchor.col + fp.w; c++) {
-      for (let r = anchor.row; r < anchor.row + fp.d; r++) keys.push(keyOf(c, r));
+    for (let c = anchor.sc; c < anchor.sc + fp.w; c++) {
+      for (let r = anchor.sr; r < anchor.sr + fp.d; r++) keys.push(keyOf(c, r));
     }
     return keys;
   }
@@ -66,11 +81,11 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
 
   // Центр прямоугольника предмета в мировых координатах
   function rectCenter(anchor, steps) {
-    const fp = footprint(steps);
+    const fp = footprintSub(steps);
     return new THREE.Vector3(
-      -cols / 2 + anchor.col + fp.w / 2,
+      -cols / 2 + (anchor.sc + fp.w / 2) / SUB,
       0,
-      -rows / 2 + anchor.row + fp.d / 2
+      -rows / 2 + (anchor.sr + fp.d / 2) / SUB
     );
   }
 
@@ -82,15 +97,29 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     raycaster.setFromCamera(ndc, camera);
   }
 
-  // Какая клетка пола под курсором (null, если мимо пола)
-  function cellFromEvent(event) {
+  // Какая подклетка пола под курсором (null, если мимо пола)
+  function subFromEvent(event) {
     setRayFromEvent(event);
     const hit = raycaster.intersectObject(floor)[0];
     if (!hit) return null;
-    const col = Math.floor(hit.point.x + cols / 2);
-    const row = Math.floor(hit.point.z + rows / 2);
-    if (col < 0 || col >= cols || row < 0 || row >= rows) return null;
-    return { col, row };
+    const sc = Math.floor((hit.point.x + cols / 2) * SUB);
+    const sr = Math.floor((hit.point.z + rows / 2) * SUB);
+    if (sc < 0 || sc >= subCols || sr < 0 || sr >= subRows) return null;
+    return { sc, sr };
+  }
+
+  // Ищем под курсором свободную поверхность (для mountable-предметов)
+  function hostUnderCursor(event) {
+    if (!def || !def.mountable) return null;
+    setRayFromEvent(event);
+    const hits = raycaster.intersectObjects(placedItems, true);
+    for (const hit of hits) {
+      let g = hit.object;
+      while (g && !placedItems.includes(g)) g = g.parent;
+      if (!g) continue;
+      if (g.userData.def.surfaceHeight && !g.userData.occupant) return g;
+    }
+    return null;
   }
 
   // Призрак: копия предмета с полупрозрачными материалами
@@ -103,7 +132,7 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
         obj.material.opacity = Math.min(obj.material.opacity, 0.55);
       }
     });
-    g.rotation.y = (rotationSteps * Math.PI) / 2;
+    g.rotation.y = (rotationSteps * Math.PI) / 4;
     return g;
   }
 
@@ -116,11 +145,26 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     });
   }
 
-  // Переставить призрак к клетке под курсором
-  function updateGhost(cell) {
-    if (!ghost || !cell) return; // мимо пола — призрак остаётся где был
-    currentAnchor = anchorFromCell(cell, rotationSteps);
-    ghost.position.copy(rectCenter(currentAnchor, rotationSteps));
+  // Переставить призрак: сначала пробуем поверхность, иначе — пол
+  function updateGhostFromEvent(event) {
+    if (!ghost) return;
+    const host = hostUnderCursor(event);
+    if (host) {
+      mountTarget = host;
+      ghost.position.set(
+        host.position.x,
+        host.userData.def.surfaceHeight,
+        host.position.z
+      );
+      tintGhost(true);
+      return;
+    }
+    mountTarget = null;
+    const sub = subFromEvent(event);
+    if (!sub) return; // мимо пола — призрак остаётся где был
+    currentAnchor = anchorFromSub(sub, rotationSteps);
+    const center = rectCenter(currentAnchor, rotationSteps);
+    ghost.position.set(center.x, 0, center.z);
     tintGhost(isFree(currentAnchor, rotationSteps));
   }
 
@@ -129,20 +173,31 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     ghost = null;
     def = null;
     currentAnchor = null;
+    mountTarget = null;
   }
 
-  // Поставить предмет в текущую позицию
+  // Поставить предмет: на поверхность (mountTarget) или на пол
   function place() {
     const item = def.buildFn();
-    item.rotation.y = (rotationSteps * Math.PI) / 2;
-    item.position.copy(rectCenter(currentAnchor, rotationSteps));
-    // Запоминаем всё, что нужно, чтобы потом забрать предмет обратно
+    item.rotation.y = (rotationSteps * Math.PI) / 4;
     item.userData.def = def;
     item.userData.rotationSteps = rotationSteps;
-    item.userData.anchor = { ...currentAnchor };
-    item.userData.keys = coveredKeys(currentAnchor, rotationSteps);
-    const set = occupied[layerOf(def)];
-    item.userData.keys.forEach((k) => set.add(k));
+    if (mountTarget) {
+      // Сажаем на поверхность и связываем с «хозяином»
+      item.position.set(
+        mountTarget.position.x,
+        mountTarget.userData.def.surfaceHeight,
+        mountTarget.position.z
+      );
+      item.userData.host = mountTarget;
+      mountTarget.userData.occupant = item;
+    } else {
+      item.position.copy(rectCenter(currentAnchor, rotationSteps));
+      item.userData.anchor = { ...currentAnchor };
+      item.userData.keys = coveredKeys(currentAnchor, rotationSteps);
+      const set = occupied[layerOf(def)];
+      item.userData.keys.forEach((k) => set.add(k));
+    }
     scene.add(item);
     placedItems.push(item);
     const placedId = def.id;
@@ -160,12 +215,19 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     let item = hit.object;
     while (item && !placedItems.includes(item)) item = item.parent;
     if (!item) return;
+    // Если на предмете что-то стоит — сначала забираем верхний (он физически сверху)
+    if (item.userData.occupant) item = item.userData.occupant;
     scene.remove(item);
     placedItems.splice(placedItems.indexOf(item), 1);
     const itemDef = item.userData.def;
-    const set = occupied[layerOf(itemDef)];
-    item.userData.keys.forEach((k) => set.delete(k));
-    startPlacing(itemDef, item.userData.rotationSteps, item.userData.anchor);
+    if (item.userData.host) {
+      // Снимаем с поверхности — освобождаем «хозяина»
+      item.userData.host.userData.occupant = null;
+    } else {
+      const set = occupied[layerOf(itemDef)];
+      item.userData.keys.forEach((k) => set.delete(k));
+    }
+    startPlacing(itemDef, item.userData.rotationSteps, item.userData.anchor ?? null);
     reportComfort();
   }
 
@@ -174,15 +236,16 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     if (ghost) return; // уже что-то в руке
     def = itemDef;
     rotationSteps = steps;
-    targetRotY = (steps * Math.PI) / 2;
+    targetRotY = (steps * Math.PI) / 4;
     ghost = makeGhost();
     scene.add(ghost);
     // Появляемся там, где предмет стоял, или в центре комнаты —
     // на планшете иначе непонятно, что предмет «в руке»
     currentAnchor = anchor
       ? { ...anchor }
-      : anchorFromCell({ col: Math.floor(cols / 2), row: Math.floor(rows / 2) }, steps);
-    ghost.position.copy(rectCenter(currentAnchor, rotationSteps));
+      : anchorFromSub({ sc: Math.floor(subCols / 2), sr: Math.floor(subRows / 2) }, steps);
+    const center = rectCenter(currentAnchor, rotationSteps);
+    ghost.position.set(center.x, 0, center.z);
     tintGhost(isFree(currentAnchor, rotationSteps));
     onStateChange('placing', def.id);
   }
@@ -190,11 +253,11 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
   canvas.addEventListener('pointerdown', (e) => {
     pointers.add(e.pointerId);
     if (pointers.size > 1) pinchActive = true;
-    if (ghost) updateGhost(cellFromEvent(e));
+    if (ghost) updateGhostFromEvent(e);
   });
 
   canvas.addEventListener('pointermove', (e) => {
-    if (ghost) updateGhost(cellFromEvent(e));
+    if (ghost) updateGhostFromEvent(e);
   });
 
   canvas.addEventListener('pointerup', (e) => {
@@ -204,9 +267,9 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
     pinchActive = false;
     if (wasPinch) return; // это был зум, а не клик
     if (ghost) {
-      const cell = cellFromEvent(e);
-      if (cell) updateGhost(cell);
-      if (currentAnchor && isFree(currentAnchor, rotationSteps)) place();
+      updateGhostFromEvent(e);
+      if (mountTarget) place();
+      else if (currentAnchor && isFree(currentAnchor, rotationSteps)) place();
     } else {
       tryPickup(e);
     }
@@ -220,19 +283,26 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, onSt
   return {
     startPlacing,
     isPlacing: () => ghost !== null,
-    // Повернуть предмет «в руке» на 90° вокруг его центра
+    // Повернуть предмет «в руке» на 45° вокруг его центра
     rotate() {
       if (!ghost) return;
+      if (mountTarget) {
+        // На поверхности просто крутимся — клетки не считаем
+        rotationSteps = (rotationSteps + 1) % 8;
+        targetRotY += Math.PI / 4;
+        return;
+      }
       // Центр прямоугольника до поворота — чтобы предмет крутился «на месте»
-      const fpOld = footprint(rotationSteps);
-      const centerCell = {
-        col: currentAnchor.col + Math.floor((fpOld.w - 1) / 2),
-        row: currentAnchor.row + Math.floor((fpOld.d - 1) / 2),
+      const fpOld = footprintSub(rotationSteps);
+      const centerSub = {
+        sc: currentAnchor.sc + Math.floor((fpOld.w - 1) / 2),
+        sr: currentAnchor.sr + Math.floor((fpOld.d - 1) / 2),
       };
-      rotationSteps = (rotationSteps + 1) % 4;
-      targetRotY += Math.PI / 2;
-      currentAnchor = anchorFromCell(centerCell, rotationSteps);
-      ghost.position.copy(rectCenter(currentAnchor, rotationSteps));
+      rotationSteps = (rotationSteps + 1) % 8;
+      targetRotY += Math.PI / 4;
+      currentAnchor = anchorFromSub(centerSub, rotationSteps);
+      const center = rectCenter(currentAnchor, rotationSteps);
+      ghost.position.set(center.x, 0, center.z);
       tintGhost(isFree(currentAnchor, rotationSteps));
     },
     // Отмена: предмет возвращается в ячейку панели
