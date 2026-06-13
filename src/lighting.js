@@ -30,8 +30,10 @@ const fract = (x) => x - Math.floor(x);
 const hash1 = (n) => fract(Math.sin(n * 91.37) * 43758.5453);
 
 export function createLighting(scene) {
-  // HEMI — холодный синеватый полумрак. Низкий: тени глубокие, но не чёрные.
-  const hemi = new THREE.HemisphereLight(0x39476a, 0x141622, 0.35);
+  // HEMI — мягкое РАССЕЯННОЕ заполнение «от окна», покрывает всю комнату (как нейтральный
+  // киношный fill «за кадром»: вроде источника нет, а тени не проваливаются). Низ заметно
+  // поднят (0x242a36), чтобы свет доставал и до обращённых вниз граней — комната ровно залита.
+  const hemi = new THREE.HemisphereLight(0x45526e, 0x242a36, 0.6);
   scene.add(hemi);
 
   // WINDOW — главный свет/заполнение, падает ИЗ окна (дальняя стена z≈-4, проём по центру).
@@ -53,10 +55,12 @@ export function createLighting(scene) {
   win.shadow.camera.far = 32;
   win.shadow.bias = -0.0005;
   win.shadow.normalBias = 0.02;
+  win.shadow.radius = 4; // мягче край тени (в связке с поднятым fill тени не резкие)
   scene.add(win);
 
-  // FILL — еле заметный холодный отскок спереди (без тени): дальняя стена не уходит в чёрное.
-  const fill = new THREE.DirectionalLight(0x46587e, 0.2);
+  // FILL — нейтральный отскок спереди (без тени): подсвечивает обращённые к зрителю грани
+  // и дальнюю стену, снимает контраст. Чуть нейтральнее холодного окна.
+  const fill = new THREE.DirectionalLight(0x4c5566, 0.34);
   fill.position.set(-4, 3, 8);
   fill.target.position.set(0, 0.7, -1);
   scene.add(fill.target);
@@ -68,8 +72,8 @@ export function createLighting(scene) {
   const C_NIGHT = new THREE.Color(0x0c1430); // почти тьма, глубокий синий
   const C_RAIN = new THREE.Color(0x586781); // свинцовый дождь
   const C_MOON = new THREE.Color(0xbcd0f4); // серебро полнолуния
-  const HEMI_NIGHT = new THREE.Color(0x32425f); // ночной полумрак — синеватый, не чёрный
-  const HEMI_DAY = new THREE.Color(0x46587e);
+  const HEMI_NIGHT = new THREE.Color(0x3c465c); // ночной полумрак — синеватый, но поднятый (не чёрный)
+  const HEMI_DAY = new THREE.Color(0x586a88);
   const scratch = new THREE.Color();
   const scratch2 = new THREE.Color();
 
@@ -86,9 +90,9 @@ export function createLighting(scene) {
     // прибраться), без сезонной математики (картинка за стеклом ещё не идёт).
     if (!hasWindow) {
       win.color.setHex(0x9ab0d0);
-      win.intensity = 1.05;
-      hemi.color.setHex(0x39476a);
-      hemi.intensity = 0.42;
+      win.intensity = 0.9;
+      hemi.color.setHex(0x45526e);
+      hemi.intensity = 0.7;
       return;
     }
 
@@ -133,13 +137,13 @@ export function createLighting(scene) {
     scratch.lerp(C_MOON, moonWash * 0.6);
     win.color.copy(scratch);
 
-    // --- яркость: окно — ОСНОВНОЕ заполнение, ярче всего днём; ночью почти гаснет
-    //     (комнату держат лампа/приборы), в полнолуние — умеренное серебро ---
-    const winI = 1.7 * dayF * clarity + duskMix * 1.0 * clarity + moonWash * 0.65 + 0.05;
+    // --- яркость направленного окна (мотивированный «ключ»): даёт форму и мягкую тень,
+    //     но НЕ доминирует — основное заполнение мягко тянет HEMI (меньше контраста) ---
+    const winI = 1.25 * dayF * clarity + duskMix * 0.85 * clarity + moonWash * 0.55 + 0.06;
     win.intensity = winI * mood;
 
-    // --- HEMI «дышит» сутками, но всегда холодный (тепло — только от приборов) ---
-    hemi.intensity = 0.32 + 0.3 * dayF + 0.1 * moonWash;
+    // --- HEMI — рассеянное заполнение, покрывает всю комнату; заметно дышит сутками ---
+    hemi.intensity = 0.55 + 0.45 * dayF + 0.12 * moonWash;
     scratch2.copy(HEMI_NIGHT).lerp(HEMI_DAY, dayF);
     hemi.color.copy(scratch2);
   }

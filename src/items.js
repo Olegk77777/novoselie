@@ -1056,7 +1056,7 @@ export function createTV() {
   g.add(cyl(0.012, 0.55, metalMaterial, 0.16, 0.72, -0.14, -0.35, -0.5));
 
   // Синий мерцающий свет кинескопа — «телек в тёмной комнате» (гаснет без тока).
-  const tvLight = makeApplianceLight(0x5878a8, 3.2, [-0.07, 0.32, 0.5]);
+  const tvLight = makeApplianceLight(0x6a93cc, 4.2, [-0.07, 0.32, 0.5]);
   g.add(tvLight);
 
   // === Переключение «каналов»: случайный канал держится ~6–11 c, при смене —
@@ -1087,7 +1087,7 @@ export function createTV() {
     }
     tvUniforms.uStatic.value = t < staticUntil ? 1.0 : 0.0;
     // мерцание света по «кадрам» + всплеск на помехах (смена канала/снег)
-    tvLight.intensity = 0.9 + 0.3 * Math.sin(t * 9.0) + (t < staticUntil ? 0.7 : 0);
+    tvLight.intensity = 1.7 + 0.5 * Math.sin(t * 9.0) + (t < staticUntil ? 1.0 : 0);
   };
   return g;
 }
@@ -1265,16 +1265,16 @@ export function createTapePlayer() {
   const eqScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.225, 0.062), eqMat);
   eqScreen.position.set(0, 0.135, 0.142);
   g.add(eqScreen);
-  // Еле заметный зелёный отсвет аквалайзера (характерная деталь, не «прожектор»).
+  // Зелёный отсвет аквалайзера — заметная характерная деталь магнитолы (гаснет без тока).
   // На iPad выключен ради перфа (второстепенный свет).
-  const eqLight = LOW_END ? null : makeApplianceLight(0x2e8a36, 0.85, [0, 0.135, 0.18]);
+  const eqLight = LOW_END ? null : makeApplianceLight(0x39ad42, 1.9, [0, 0.16, 0.2]);
   if (eqLight) g.add(eqLight);
   // game.js зовёт tick(t) каждый кадр: время крутим всегда, но горит только при токе
   g.userData.tick = (t) => {
     eqUniforms.uTime.value = t;
     const on = g.userData.powered ? 1.0 : 0.0;
     eqUniforms.uOn.value = on; // аквалайзер горит только при наличии тока
-    if (eqLight) eqLight.intensity = on ? 0.18 : 0;
+    if (eqLight) eqLight.intensity = on ? 0.55 + 0.08 * Math.sin(t * 6.0) : 0; // лёгкое мерцание под музыку
   };
   return g;
 }
