@@ -44,25 +44,45 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
 
   // Ручной множитель зума от пользователя (колесо/пинч). 1.0 = ровно авто-вписывание.
   let userZoom = 1.0;
+  // Сколько пикселей слева отдать под HUD (плашки уюта/заданий). Комната
+  // вписывается в ПРАВУЮ область [reservedLeft, ширина] и сдвигается туда,
+  // чтобы панель заданий не перекрывала комнату. 0 = комната по центру.
+  let reservedLeft = 0;
 
-  // Считает зум, при котором пол занимает FILL экрана (работает при любом aspect)
-  function fitZoom() {
+  // Габариты комнаты в координатах экрана (NDC) при zoom=1, симметричной рамке
+  // без сдвига. Отдельно по X и Y — чтобы вписать по ширине и высоте раздельно.
+  function fitMetrics() {
+    camera.clearViewOffset();
     camera.zoom = 1;
     camera.updateProjectionMatrix();
     // Обновляем матрицу положения камеры, иначе project() считает её стоящей в нуле
     camera.updateMatrixWorld(true);
-    let maxNdc = 0;
+    let mx = 0;
+    let my = 0;
     for (const corner of corners) {
-      // project() переводит точку мира в координаты экрана от -1 до 1
       const ndc = corner.clone().project(camera);
-      maxNdc = Math.max(maxNdc, Math.abs(ndc.x), Math.abs(ndc.y));
+      mx = Math.max(mx, Math.abs(ndc.x));
+      my = Math.max(my, Math.abs(ndc.y));
     }
-    return FILL / maxNdc;
+    return { mx, my };
   }
 
-  // Применяет итоговый зум = авто-вписывание × ручной множитель
+  // Вписывает комнату: по ШИРИНЕ — в доступную область (экран минус полоса HUD),
+  // по ВЫСОТЕ — целиком; затем сдвигает вправо, в центр правой области.
   function applyZoom() {
-    camera.zoom = fitZoom() * userZoom;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const { mx, my } = fitMetrics();
+    const availX = Math.max(0.1, (w - reservedLeft) / w); // доля ширины под комнату
+    const fit = Math.min((FILL * availX) / mx, FILL / my);
+    camera.zoom = fit * userZoom;
+    if (reservedLeft > 0) {
+      // сдвиг вправо на половину полосы — комната встаёт по центру правой части.
+      // Сдвиг идёт через матрицу проекции, поэтому клики/raycast остаются верными.
+      camera.setViewOffset(w, h, -reservedLeft / 2, 0, w, h);
+    } else {
+      camera.clearViewOffset();
+    }
     camera.updateProjectionMatrix();
   }
 
@@ -76,6 +96,13 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
     applyZoom();
   }
 
+  // Ширина левой полосы под HUD (в пикселях). Сильнее ~42% экрана не ужимаем,
+  // чтобы на узком телефоне комната не стала крошечной.
+  function setReservedLeft(px) {
+    reservedLeft = THREE.MathUtils.clamp(px, 0, window.innerWidth * 0.42);
+    applyZoom();
+  }
+
   // Меняет ручной зум: factor > 1 приближает, < 1 отдаляет
   function zoomBy(factor) {
     userZoom = THREE.MathUtils.clamp(userZoom * factor, MIN_USER_ZOOM, MAX_USER_ZOOM);
@@ -83,7 +110,7 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
   }
 
   applyZoom(); // стартовое вписывание пола в экран
-  return { camera, resize, zoomBy };
+  return { camera, resize, zoomBy, setReservedLeft };
 }
 
 // Навешивает управление зумом на холст: колесо мыши + щипок двумя пальцами (pinch).

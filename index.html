@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=41">
-  <link rel="stylesheet" href="design/type.css?v=41">
+  <link rel="stylesheet" href="design/colors.css?v=42">
+  <link rel="stylesheet" href="design/type.css?v=42">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -355,20 +355,20 @@
       text-transform: uppercase;
       letter-spacing: 0.1em;
       font-weight: 700;
-      font-size: 15px;
+      font-size: 17px;
       color: var(--stamp);
     }
     .ui-quests-count {
       font-family: var(--font-paper);
-      font-size: 13px;
+      font-size: 15px;
       color: var(--ink-soft);
     }
     .ui-quest-line {
       display: flex;
       gap: 8px;
       font-family: var(--font-paper);
-      font-size: var(--fs-paper);
-      line-height: 1.45;
+      font-size: calc(var(--fs-paper) * 1.15);
+      line-height: 1.5;
       margin-top: 6px;
       color: var(--ink);
     }
@@ -568,6 +568,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=41"></script>
+  <script type="module" src="src/game.js?v=42"></script>
 </body>
 </html>
