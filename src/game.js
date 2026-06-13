@@ -3,17 +3,17 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=42';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=42';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=42';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=42';
-import { createPlacement } from './placement.js?v=42';
-import { createUI } from './ui.js?v=42';
-import { renderItemIcon } from './icon.js?v=42';
-import { createPower } from './power.js?v=42';
-import { evaluateCombos } from './combos.js?v=42';
-import { isQuestDone } from './quests.js?v=42';
-import { createCat } from './cat.js?v=42';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=43';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=43';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=43';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=43';
+import { createPlacement } from './placement.js?v=43';
+import { createUI } from './ui.js?v=43';
+import { renderItemIcon } from './icon.js?v=43';
+import { createPower } from './power.js?v=43';
+import { evaluateCombos } from './combos.js?v=43';
+import { isQuestDone } from './quests.js?v=43';
+import { createCat } from './cat.js?v=43';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -439,7 +439,9 @@ async function init() {
   // комнату вправо ровно на неё — плашки уюта/заданий больше не перекрывают комнату.
   function updateReservedLeft() {
     const leftEl = document.getElementById('ui-left');
-    setReservedLeft(leftEl ? leftEl.getBoundingClientRect().width + 28 : 0);
+    const applied = setReservedLeft(leftEl ? leftEl.getBoundingClientRect().width + 28 : 0);
+    // подсказку-тост сверху центрируем над КОМНАТОЙ (она сдвинута вправо на applied/2)
+    document.documentElement.style.setProperty('--room-offset', applied / 2 + 'px');
   }
   updateReservedLeft();
   // Шрифты грузятся асинхронно — ширина колонки может измениться, пересчитаем

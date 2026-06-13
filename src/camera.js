@@ -101,6 +101,7 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
   function setReservedLeft(px) {
     reservedLeft = THREE.MathUtils.clamp(px, 0, window.innerWidth * 0.42);
     applyZoom();
+    return reservedLeft; // фактически применённая полоса (после ограничения)
   }
 
   // Меняет ручной зум: factor > 1 приближает, < 1 отдаляет

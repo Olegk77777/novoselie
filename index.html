@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=42">
-  <link rel="stylesheet" href="design/type.css?v=42">
+  <link rel="stylesheet" href="design/colors.css?v=43">
+  <link rel="stylesheet" href="design/type.css?v=43">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -405,7 +405,8 @@
     #ui-hint-toast {
       position: fixed;
       top: 14px;
-      left: 50%;
+      /* центрируем над КОМНАТОЙ: она сдвинута вправо на --room-offset (см. game.js) */
+      left: calc(50% + var(--room-offset, 0px));
       transform: translateX(-50%) rotate(-0.5deg);
       padding: 11px 24px;
       background: linear-gradient(#f4edd9, #e7dabb);
@@ -568,6 +569,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=42"></script>
+  <script type="module" src="src/game.js?v=43"></script>
 </body>
 </html>
