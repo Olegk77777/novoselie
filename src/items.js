@@ -72,6 +72,25 @@ function box(w, h, d, material, x, y, z) {
 }
 const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
+// Слабое устройство (ретина + сенсор ≈ iPad): отключаем второстепенный свет (магнитола).
+// Тот же признак, что в lighting.js (дублируем одну строку, чтобы не плодить зависимость).
+const LOW_END = window.devicePixelRatio > 1.5 && 'ontouchstart' in window;
+
+// Точечный свет прибора: тёплая/холодная «лужица» от лампы/экрана. БЕЗ тени (дёшево),
+// с ограниченным радиусом (distance, decay 2) — не пересвечивает всю комнату. Стартовая
+// яркость 0; гасится/зажигается в userData.tick по g.userData.powered (нет тока — 0).
+// ВАЖНО: свет вырезается из иконки (icon.js) и призрака (placement.makeGhost), иначе
+// засветит превью в панели и будет «лампой в руке» при расстановке.
+// ПРАВИЛО НА БУДУЩЕЕ: новый светящийся предмет (лава-лампа, неон, фигурка) — это запись
+// в data/items.json (surface:"emissive" + блок light) + такой же makeApplianceLight в его
+// builder-функции. Сама система света (lighting.js) и гашение по току уже готовы.
+function makeApplianceLight(color, distance, pos) {
+  const light = new THREE.PointLight(color, 0, distance, 2);
+  light.position.set(pos[0], pos[1], pos[2]);
+  light.castShadow = false;
+  return light;
+}
+
 // Цилиндр — для круглых деталей (верньеры ТВ, динамики, антенны, ручки).
 // rx/rz — наклон в радианах (по умолчанию стоит вертикально вдоль Y).
 function cyl(radius, h, material, x, y, z, rx = 0, rz = 0) {
@@ -1036,6 +1055,10 @@ export function createTV() {
   g.add(cyl(0.012, 0.55, metalMaterial, -0.16, 0.72, -0.14, -0.35, 0.5));
   g.add(cyl(0.012, 0.55, metalMaterial, 0.16, 0.72, -0.14, -0.35, -0.5));
 
+  // Синий мерцающий свет кинескопа — «телек в тёмной комнате» (гаснет без тока).
+  const tvLight = makeApplianceLight(0x5878a8, 3.2, [-0.07, 0.32, 0.5]);
+  g.add(tvLight);
+
   // === Переключение «каналов»: случайный канал держится ~6–11 c, при смене —
   // короткий всплеск помех; плюс редкие самопроизвольные просадки сигнала. ===
   const CH_COUNT = 11;
@@ -1047,7 +1070,7 @@ export function createTV() {
     // Телевизор работает только при наличии тока (game.js ставит userData.powered)
     const on = !!g.userData.powered;
     tvUniforms.uOn.value = on ? 1.0 : 0.0;
-    if (!on) { wasOn = false; started = false; return; } // нет тока — тёмное стекло
+    if (!on) { wasOn = false; started = false; tvLight.intensity = 0; return; } // нет тока — тёмное стекло
     if (!started) { started = true; nextSwitch = t + 6 + Math.random() * 5; nextDropout = t + 4 + Math.random() * 8; }
     if (!wasOn) { staticUntil = t + 0.4; wasOn = true; }  // только что включился — миг прогрева (помехи)
     if (t >= nextSwitch) {
@@ -1063,6 +1086,8 @@ export function createTV() {
       nextDropout = t + 6 + Math.random() * 10;
     }
     tvUniforms.uStatic.value = t < staticUntil ? 1.0 : 0.0;
+    // мерцание света по «кадрам» + всплеск на помехах (смена канала/снег)
+    tvLight.intensity = 0.9 + 0.3 * Math.sin(t * 9.0) + (t < staticUntil ? 0.7 : 0);
   };
   return g;
 }
@@ -1183,7 +1208,18 @@ export function createFloorLamp() {
   const g = new THREE.Group();
   g.add(box(0.4, 0.06, 0.4, plasticMaterial, 0, 0.03, 0));
   g.add(box(0.06, 1.32, 0.06, metalMaterial, 0, 0.72, 0));
-  g.add(box(0.46, 0.34, 0.46, lambert(COLORS.lampshade, { emissive: 0x6a4a20 }), 0, 1.52, 0));
+  // Абажур светится сам (emissive) + льёт тёплый свет в комнату — ГЛАВНЫЙ очаг уюта.
+  const shadeMat = lambert(COLORS.lampshade, { emissive: 0x6a4a20 });
+  g.add(box(0.46, 0.34, 0.46, shadeMat, 0, 1.52, 0));
+  const lamp = makeApplianceLight(0xffd9a0, 6.5, [0, 1.5, 0]); // янтарный, тёплый радиус
+  g.add(lamp);
+  // Торшер — электроприбор (cordLength): горит только при токе (game.js ставит powered).
+  // Раньше абажур светился всегда — теперь, как ТВ/аквариум, зависит от розетки.
+  g.userData.tick = (t) => {
+    const on = !!g.userData.powered;
+    lamp.intensity = on ? 3.4 * (0.97 + 0.03 * Math.sin(t * 2.0)) : 0; // лёгкое «дыхание» накала
+    shadeMat.emissive.setHex(on ? 0x6a4a20 : 0x141008);
+  };
   return g;
 }
 
@@ -1228,10 +1264,16 @@ export function createTapePlayer() {
   const eqScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.225, 0.062), eqMat);
   eqScreen.position.set(0, 0.135, 0.142);
   g.add(eqScreen);
+  // Еле заметный зелёный отсвет аквалайзера (характерная деталь, не «прожектор»).
+  // На iPad выключен ради перфа (второстепенный свет).
+  const eqLight = LOW_END ? null : makeApplianceLight(0x2e8a36, 0.85, [0, 0.135, 0.18]);
+  if (eqLight) g.add(eqLight);
   // game.js зовёт tick(t) каждый кадр: время крутим всегда, но горит только при токе
   g.userData.tick = (t) => {
     eqUniforms.uTime.value = t;
-    eqUniforms.uOn.value = g.userData.powered ? 1.0 : 0.0; // аквалайзер горит только при наличии тока
+    const on = g.userData.powered ? 1.0 : 0.0;
+    eqUniforms.uOn.value = on; // аквалайзер горит только при наличии тока
+    if (eqLight) eqLight.intensity = on ? 0.18 : 0;
   };
   return g;
 }
@@ -1353,6 +1395,10 @@ export function createAquarium() {
   glass.renderOrder = 3;
   g.add(glass);
 
+  // Холодный бирюзовый свет аквариума (от подсветки крышки) — гаснет без тока.
+  const aqLight = makeApplianceLight(0x9fd4e8, 2.6, [0, tankY + tankH / 2, 0]);
+  g.add(aqLight);
+
   // --- Анимация: game.js зовёт tick(t) каждый кадр ---
   // Аквариум — электроприбор: компрессор и подсветка работают только при токе.
   // Без розетки он «тёмный и неподвижный»: копим время только под током (рыбки,
@@ -1367,6 +1413,7 @@ export function createAquarium() {
     waterMat.uniforms.uTime.value = tt;
     waterMat.uniforms.uOn.value = on ? 1.0 : 0.0;
     lampMat.emissive.setHex(on ? 0xffcf80 : 0x080808); // подсветка под крышкой гаснет
+    aqLight.intensity = on ? 1.1 + 0.15 * Math.sin(animT * 0.8) : 0; // дыхание от animT (замирает без тока)
     for (const f of fishes) {
       const p = f.userData.p;
       const arg = tt * p.speed + p.phase;

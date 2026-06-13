@@ -23,6 +23,10 @@ export function renderItemIcon(buildFn, size = 128) {
   scene.add(dir);
 
   const model = buildFn();
+  // Свет приборов (PointLight) в иконку не нужен — вырезаем, чтобы не засветить превью.
+  const iconLights = [];
+  model.traverse((o) => { if (o.isLight) iconLights.push(o); });
+  iconLights.forEach((l) => l.parent && l.parent.remove(l));
   // В 56 пикселях текстура читается как шум — заменяем её родным цветом-заглушкой
   // материала (см. texturedMaterial в items.js). Цветные материалы без текстуры
   // (обивка, экран, стекло) оставляем как есть.

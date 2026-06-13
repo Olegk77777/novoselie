@@ -8,6 +8,19 @@ import * as THREE from 'three';
 
 const SUB = 2; // подклеток в одной клетке (2 = шаг в полклетки)
 
+// Тени: твёрдая мебель и кастует, и принимает тень. Прозрачные (стекло/вода),
+// шейдерные (экраны ТВ/аквалайзер/вода) и не-меши (свет приборов, линии шнуров,
+// спрайты) — пропускаем (тень от них некорректна/не нужна).
+function applyShadowFlags(item) {
+  item.traverse((o) => {
+    if (!o.isMesh) return;
+    const m = o.material;
+    if (m.transparent || m.isShaderMaterial) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+  });
+}
+
 // Создаёт контроллер расстановки.
 // onStateChange(state, itemId): 'placing' | 'placed' | 'cancelled'
 // onComfortChange(total): сумма очков уюта всех поставленных предметов
@@ -245,6 +258,7 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
     if (!wallState || !wallState.free) return;
     const { surface, along, height } = wallState;
     const item = def.buildFn();
+    applyShadowFlags(item);
     item.rotation.y = surface.rotationY;
     item.position.copy(wallWorldPos(surface, along, height));
     item.userData.def = def;
@@ -273,6 +287,10 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
       }
     });
     g.rotation.y = (rotationSteps * Math.PI) / 4;
+    // Свет приборов не таскаем «в руке» — вырезаем из призрака.
+    const ghostLights = [];
+    g.traverse((o) => { if (o.isLight) ghostLights.push(o); });
+    ghostLights.forEach((l) => l.parent && l.parent.remove(l));
     return g;
   }
 
@@ -322,6 +340,7 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
   function place() {
     if (def.placement === 'wall') return placeWall();
     const item = def.buildFn();
+    applyShadowFlags(item);
     item.rotation.y = (rotationSteps * Math.PI) / 4;
     item.userData.def = def;
     item.userData.rotationSteps = rotationSteps;
