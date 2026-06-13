@@ -3,16 +3,16 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=29';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=29';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=29';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=29';
-import { createPlacement } from './placement.js?v=29';
-import { createUI } from './ui.js?v=29';
-import { renderItemIcon } from './icon.js?v=29';
-import { createPower } from './power.js?v=29';
-import { evaluateCombos } from './combos.js?v=29';
-import { isQuestDone } from './quests.js?v=29';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=30';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=30';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=30';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=30';
+import { createPlacement } from './placement.js?v=30';
+import { createUI } from './ui.js?v=30';
+import { renderItemIcon } from './icon.js?v=30';
+import { createPower } from './power.js?v=30';
+import { evaluateCombos } from './combos.js?v=30';
+import { isQuestDone } from './quests.js?v=30';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -153,8 +153,16 @@ async function init() {
     placedItems,
     connections,
     windowSeg: { alongMin: windowCutout.alongMin, alongMax: windowCutout.alongMax, z: wallSurfaces[0].plane },
-    // Расстояние до ближайшей из двух наших стен (x=-cols/2 и z=-rows/2)
-    wallDist: (item) => Math.min(item.position.x + GRID_COLS / 2, item.position.z + GRID_ROWS / 2),
+    // Расстояние до ближайшей из ВСЕХ четырёх стен. Комната замкнута, но две
+    // ближние стены не рисуются (чтобы видеть внутрь) — для игрока они всё равно
+    // стены, поэтому «сервант к стене» засчитываем у любой из четырёх.
+    wallDist: (item) =>
+      Math.min(
+        item.position.x + GRID_COLS / 2, // левая (x = -cols/2)
+        GRID_COLS / 2 - item.position.x, // правая, ближняя (x = +cols/2)
+        item.position.z + GRID_ROWS / 2, // дальняя (z = -rows/2)
+        GRID_ROWS / 2 - item.position.z  // ближняя (z = +rows/2)
+      ),
   });
 
   function refreshQuestsUI() {
