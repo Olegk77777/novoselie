@@ -167,7 +167,7 @@ export function applyWindow(wallsGroup, cols, rows) {
     new THREE.PlaneGeometry(w, h),
     new THREE.ShaderMaterial({
       transparent: true,
-      uniforms: { uTime: { value: 0 } },
+      uniforms: { uTime: { value: 0 }, uAspect: { value: w / h } },
       vertexShader: `
         varying vec2 vUv;
         void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
@@ -175,17 +175,15 @@ export function applyWindow(wallsGroup, cols, rows) {
       fragmentShader: `
         precision highp float;
         uniform float uTime;
+        uniform float uAspect;   // ширина/высота окна — чтобы капли на стекле были круглыми
         varying vec2 vUv;
         float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        void main() {
-          vec2 uv = vUv;
-          float TAU = 6.28318;
-          float phase = fract(uTime / 360.0);  // полные сутки за 6 минут (созерцательно)
-          float sun = cos(phase * TAU);        // высота солнца: +1 полдень, -1 полночь
-          float dayF = smoothstep(-0.08, 0.45, sun);   // 1 день → 0 ночь
-          float nightF = 1.0 - dayF;
-          float duskMix = smoothstep(0.55, 0.0, abs(sun)); // у горизонта — закат/рассвет
+        float hash1(float n){ return fract(sin(n * 91.37) * 43758.5453); }
 
+        // Думерский пейзаж за окном. Вынесен в функцию, чтобы капли на стекле
+        // могли его ПРЕЛОМЛЯТЬ (вызываем scene() со смещёнными uv — эффект линзы).
+        vec3 scene(vec2 uv, float phase, float dayF, float nightF, float duskMix, float clarity){
+          float TAU = 6.28318;
           // Небо: ночь / день / закат
           float g = smoothstep(0.0, 1.0, uv.y);
           vec3 night = mix(vec3(0.09,0.09,0.18), vec3(0.02,0.02,0.07), g);
@@ -198,15 +196,15 @@ export function applyWindow(wallsGroup, cols, rows) {
           vec2 sg = floor(uv * vec2(70.0, 45.0));
           float sh = hash(sg);
           float star = smoothstep(0.975, 1.0, sh) * (0.6 + 0.4 * sin(uTime * 2.5 + sh * 40.0));
-          col += vec3(0.9, 0.92, 1.0) * star * nightF;
+          col += vec3(0.9, 0.92, 1.0) * star * nightF * clarity;  // в тучах звёзд не видно
 
           // Светило на дуге (солнце днём, луна ночью) + мягкое гало
           float ang = phase * TAU;
           vec2 lp = vec2(0.5 + 0.42 * sin(ang), 0.32 + 0.52 * cos(ang));
           float dl = distance((uv - lp) * vec2(1.0, 0.9), vec2(0.0));
           vec3 discCol = mix(vec3(0.86,0.89,0.97), vec3(1.0,0.92,0.74), dayF);
-          col += discCol * smoothstep(0.3, 0.0, dl) * 0.22;
-          col = mix(col, discCol, smoothstep(0.05, 0.035, dl));
+          col += discCol * smoothstep(0.3, 0.0, dl) * 0.22 * clarity;        // гало гаснет в тучах
+          col = mix(col, discCol, smoothstep(0.05, 0.035, dl) * clarity);    // и сам диск солнца/луны
 
           // Город — силуэты панелек, ночью часть окон горит тёплым
           vec3 cityCol = mix(vec3(0.04,0.04,0.07), vec3(0.11,0.11,0.14), dayF);
@@ -231,9 +229,121 @@ export function applyWindow(wallsGroup, cols, rows) {
           // Провода ЛЭП — две провисающие линии
           col = mix(col, vec3(0.03,0.03,0.05), smoothstep(0.005, 0.0, abs(uv.y - (0.60 + 0.025*sin(uv.x*7.0+1.0)))) * 0.7);
           col = mix(col, vec3(0.03,0.03,0.05), smoothstep(0.004, 0.0, abs(uv.y - (0.66 + 0.02*sin(uv.x*7.0)))) * 0.5);
+          return col;
+        }
 
-          // Косой блик на стекле
-          col += vec3(0.6,0.65,0.7) * smoothstep(0.02, 0.0, abs((uv.x - uv.y) + 0.18)) * 0.12;
+        // Косой дождь-струи за стеклом: 3 слоя для глубины (параллакс).
+        // Капля = тонкая вытянутая чёрточка, непрерывно падающая вниз.
+        float rainFall(vec2 uv, float t){
+          uv.x += uv.y * 0.16;                 // наклон от ветра
+          float acc = 0.0;
+          for (int k = 0; k < 3; k++){
+            float fk = float(k);
+            float n = 70.0 + fk * 46.0;        // плотность колонок (дальше — гуще и мельче)
+            float x = uv.x * n;
+            float coli = floor(x);
+            float fx = fract(x) - 0.5;
+            float seed = hash1(coli + fk * 57.0);
+            float speed = (0.55 + seed * 0.5) * (1.0 + fk * 0.45);
+            float seg = 0.10 + seed * 0.10;    // расстояние между каплями в колонке
+            float ph = fract((uv.y + t * speed) / seg);   // линия постоянной фазы падает вниз
+            float drop = smoothstep(0.5, 0.0, abs(fx))
+                       * smoothstep(0.0, 0.14, ph) * smoothstep(1.0, 0.35, ph);
+            drop *= step(0.30, seed);          // не все колонки заняты — реже, живее
+            acc += drop * (0.65 - fk * 0.13);
+          }
+          return clamp(acc, 0.0, 1.0);
+        }
+
+        void main() {
+          float t = uTime;
+          float TAU = 6.28318;
+          vec2 uv = vUv;
+
+          // --- Фаза суток (как раньше): день → закат → ночь → рассвет ---
+          float phase = fract(t / 360.0);
+          float sun = cos(phase * TAU);
+          float dayF = smoothstep(-0.08, 0.45, sun);
+          float nightF = 1.0 - dayF;
+          float duskMix = smoothstep(0.55, 0.0, abs(sun));
+
+          // --- Погодный цикл: ясно → туман → дождь → туман → ясно ---
+          // Период ~110 c, не кратен суткам (360 c) — дождь застаёт разное время суток.
+          // Вне окон дождя/тумана (wc 0..0.18 и 0.82..1.0) — ясно, окно «отдыхает».
+          float wc = fract(t / 110.0);
+          float rain = smoothstep(0.34, 0.44, wc) * smoothstep(0.66, 0.56, wc);  // ливень в середине цикла
+          float wetW = smoothstep(0.32, 0.44, wc) * smoothstep(0.78, 0.60, wc);  // капли держатся дольше дождя
+          float fog  = smoothstep(0.18, 0.34, wc) * smoothstep(0.82, 0.64, wc);  // туман шире: раньше приходит, позже тает
+          float cloud = clamp(max(rain, fog), 0.0, 1.0);                         // облачность
+          float clarity = 1.0 - 0.9 * cloud;                                     // в дождь/туман светило и звёзды гаснут
+
+          // --- Капли на стекле: смещение преломления (refr), блик (spec), мокрость (wet) ---
+          vec2 refr = vec2(0.0);
+          float spec = 0.0;
+          float wet = 0.0;
+
+          // Стекающие подтёки — крупные капли ползут вниз с извилистым следом
+          for (int i = 0; i < 8; i++){
+            float fi = float(i);
+            float s1 = hash1(fi * 12.9 + 0.5);
+            float s2 = hash1(fi * 4.7 + 1.3);
+            float colX = fract(s1 * 7.3);                       // своя колонка у каждой капли
+            float speed = 0.04 + s2 * 0.09;                     // скорость стекания
+            float headY = 1.0 - fract(s1 * 3.1 + t * speed);    // голова капли: сверху вниз
+            float sway = sin((1.0 - headY) * 9.0 + s1 * 30.0) * 0.010; // лёгкое виляние следа
+            float dxw = uv.x - colX - sway;                     // отклонение по X (в uv)
+            float dx = dxw * uAspect;                           // то же, но «круглое» (с учётом пропорций)
+            float dyH = uv.y - headY;
+            float head = smoothstep(0.05, 0.0, sqrt(dx*dx + dyH*dyH));
+            float above = uv.y - headY;                         // мокрый след тянется НАД головой (где капля прошла)
+            float trail = smoothstep(0.016, 0.0, abs(dx))
+                        * smoothstep(0.0, 0.03, above) * smoothstep(0.5, 0.0, above);
+            float d = max(head, trail * 0.65);
+            refr -= vec2(dxw, dyH) * head * 0.5;                // голова — сильная линза
+            refr.x -= dxw * trail * 0.25;                       // след слегка смещает по X
+            spec += smoothstep(0.03, 0.0, sqrt((dx+0.012)*(dx+0.012) + (dyH-0.012)*(dyH-0.012))) * head;
+            wet = max(wet, d);
+          }
+
+          // Россыпь мелких капель — «запотевшее» стекло; медленно набухают и сохнут
+          vec2 q = vec2(uv.x * uAspect, uv.y) * 24.0;
+          vec2 id = floor(q);
+          vec2 f = fract(q) - 0.5;
+          vec2 jit = (vec2(hash(id), hash(id + 7.1)) - 0.5) * 0.7;  // случайный сдвиг центра в клетке
+          float dd = length(f - jit);
+          float sz = 0.16 + 0.16 * hash(id + 3.3);
+          float md = smoothstep(sz, sz * 0.35, dd);
+          md *= smoothstep(-0.2, 0.5, sin(t * 0.22 + hash(id + 1.9) * TAU)); // «жизнь» капли
+          refr -= (f - jit) * md * 0.015;
+          spec += smoothstep(sz * 0.5, 0.0, length((f - jit) + vec2(0.05, -0.05))) * md * 0.6;
+          wet = max(wet, md * 0.6);
+
+          // Капли есть, только пока сыро (во время дождя и немного после)
+          refr *= wetW; spec *= wetW; wet *= wetW;
+
+          // --- Пейзаж, преломлённый каплями ---
+          vec3 col = scene(uv + refr, phase, dayF, nightF, duskMix, clarity);
+
+          // Пасмурность: во время дождя пейзаж сереет (свинцовое небо)
+          vec3 overcast = mix(vec3(0.20,0.21,0.24), vec3(0.08,0.08,0.12), nightF);
+          col = mix(col, overcast, rain * 0.4);
+
+          // Дождь-струи поверх пейзажа
+          float fall = rainFall(uv, t) * rain;
+          col += vec3(0.55, 0.60, 0.68) * fall * 0.30;
+
+          // --- Туман: молочная пелена, гуще у низа (стелется), медленно клубится ---
+          vec3 fogCol = mix(vec3(0.62,0.63,0.67), vec3(0.17,0.18,0.25), nightF);
+          float fy = smoothstep(0.85, 0.05, uv.y);                    // плотнее к горизонту
+          float swirl = 0.82 + 0.18 * sin(uv.x * 5.0 - t * 0.18 + uv.y * 4.0);
+          col = mix(col, fogCol, fog * (0.34 + 0.55 * fy) * swirl);
+
+          // Косой блик на стекле (в ливень приглушаем, чтобы не спорил со струями)
+          col += vec3(0.6,0.65,0.7) * smoothstep(0.02, 0.0, abs((uv.x - uv.y) + 0.18)) * 0.12 * (1.0 - rain * 0.5);
+
+          // Капли на стекле — самый ближний слой, поверх всего: тень линзы + яркий блик
+          col *= (1.0 - wet * 0.12);
+          col += vec3(0.85, 0.9, 1.0) * spec * 0.55;
 
           gl_FragColor = vec4(col, 0.93);
         }
