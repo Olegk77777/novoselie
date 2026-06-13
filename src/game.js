@@ -3,19 +3,19 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=55';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=55';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=55';
-import { MODEL_BUILDERS, createDebrisField, createDustMotes } from './items.js?v=55';
-import { createPlacement } from './placement.js?v=55';
-import { createUI } from './ui.js?v=55';
-import { renderItemIcon } from './icon.js?v=55';
-import { createPower } from './power.js?v=55';
-import { evaluateCombos } from './combos.js?v=55';
-import { isQuestDone } from './quests.js?v=55';
-import { createCat } from './cat.js?v=55';
-import { createLighting } from './lighting.js?v=55';
-import { createBloom } from './bloom.js?v=55';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=56';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=56';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=56';
+import { MODEL_BUILDERS, createDebrisField, createDustMotes } from './items.js?v=56';
+import { createPlacement } from './placement.js?v=56';
+import { createUI } from './ui.js?v=56';
+import { renderItemIcon } from './icon.js?v=56';
+import { createPower } from './power.js?v=56';
+import { evaluateCombos } from './combos.js?v=56';
+import { isQuestDone } from './quests.js?v=56';
+import { createCat } from './cat.js?v=56';
+import { createLighting } from './lighting.js?v=56';
+import { createBloom } from './bloom.js?v=56';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -284,10 +284,17 @@ async function init() {
         changed = true; // следующий квест мог тоже сразу выполниться
         questComfort += quest.def.reward?.comfort || 0;
         for (const it of quest.def.reward?.items || []) ui.changeCount(it.id, it.count);
-        // Выполнение — крупным модалом (раньше был мелкий тост, его не замечали)
+        // Разблокировка предмета-награды (лава-лампа была заперта до этого квеста)
+        for (const id of quest.def.reward?.unlock || []) ui.setLocked([id], false);
+        // Выполнение — крупным модалом (раньше был мелкий тост, его не замечали).
+        // У квеста может быть свой текст/ярлык награды (doneText/doneKicker), иначе —
+        // показываем сам текст квеста с обычным ярлыком «✓ выполнено».
         const allDone = questState.every((q) => q.done);
         if (allDone) ui.showModal(t(locale, 'ui.quests_all_done'));
-        else ui.showModal(t(locale, `quests.${quest.def.id}`), t(locale, 'ui.quest_done_kicker'));
+        else ui.showModal(
+          t(locale, quest.def.doneText || `quests.${quest.def.id}`),
+          t(locale, quest.def.doneKicker || 'ui.quest_done_kicker')
+        );
       }
     }
     refreshQuestsUI();
@@ -340,8 +347,10 @@ async function init() {
 
   // === Ремонт по шагам: мусор → окно → паркет → обои → мебель ===
   const furnitureIds = records.filter((r) => r.placement !== 'reno').map((r) => r.id);
-  // Удлинитель открывается не вместе с мебелью, а отдельно — после электрификации
-  const unlockAfterReno = furnitureIds.filter((id) => id !== EXTENSION_ID);
+  // Часть предметов открывается не вместе с мебелью, а наградой за событие:
+  // удлинитель — после электрификации, лава-лампа — за квест «гости» (см. reward.unlock).
+  const QUEST_REWARD_IDS = new Set([EXTENSION_ID, 'lava_lamp']);
+  const unlockAfterReno = furnitureIds.filter((id) => !QUEST_REWARD_IDS.has(id));
   const renoDone = { debris: false, window: false, floor: false, walls: false };
 
   // Этапы ремонта — тоже задания (показываются в журнале + модал при выполнении).

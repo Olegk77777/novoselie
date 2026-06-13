@@ -8,7 +8,7 @@
     { "id": "outlet", "model": "outlet", "size": [1, 1], "comfort": 1, "placement": "wall", "count": 2, "fixedWallHeight": 0.3, "sockets": 2, "surface": "matte" },
     { "id": "extension_cord", "model": "extension_cord", "size": [1, 1], "comfort": 2, "placement": "floor", "count": 1, "sockets": 3, "surface": "matte" },
     { "id": "bed", "model": "bed", "size": [1, 2], "comfort": 10, "placement": "floor", "count": 1, "surface": "matte" },
-    { "id": "cupboard", "model": "cupboard", "size": [3, 1], "comfort": 12, "placement": "floor", "count": 1, "surface": "combined" },
+    { "id": "cupboard", "model": "cupboard", "size": [3, 1], "comfort": 12, "placement": "floor", "count": 1, "surfaceHeight": 2.0, "surface": "combined" },
     { "id": "table", "model": "table", "size": [2, 1], "comfort": 6, "placement": "floor", "count": 1, "surfaceHeight": 0.78, "surface": "matte" },
     { "id": "armchair", "model": "armchair", "size": [1, 1], "comfort": 5, "placement": "floor", "count": 2, "surface": "matte" },
     { "id": "stool", "model": "stool", "size": [1, 1], "comfort": 2, "placement": "floor", "count": 4, "surfaceHeight": 0.57, "surface": "matte" },
@@ -20,6 +20,7 @@
     { "id": "floor_lamp", "model": "floor_lamp", "size": [1, 1], "comfort": 6, "placement": "floor", "count": 1, "cordLength": 3, "surface": "combined" },
     { "id": "tape_player", "model": "tape_player", "size": [1, 1], "comfort": 4, "placement": "floor", "count": 1, "mountable": true, "cordLength": 2.5, "surface": "combined" },
     { "id": "aquarium", "model": "aquarium", "size": [1, 1], "comfort": 8, "placement": "floor", "count": 1, "cordLength": 2, "surface": "combined" },
-    { "id": "flower_pot", "model": "flower_pot", "size": [1, 1], "comfort": 3, "placement": "floor", "count": 1, "mountable": true, "surface": "matte" }
+    { "id": "flower_pot", "model": "flower_pot", "size": [1, 1], "comfort": 3, "placement": "floor", "count": 1, "mountable": true, "surface": "matte" },
+    { "id": "lava_lamp", "model": "lava_lamp", "size": [1, 1], "comfort": 7, "placement": "floor", "count": 1, "mountable": true, "surface": "emissive" }
   ]
 }

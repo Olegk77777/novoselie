@@ -1504,6 +1504,124 @@ export function createFlowerPot() {
   return g;
 }
 
+// === Лава-лампа на аккумуляторе 1×1 (награда за квест «гости») ===
+// РАБОТАЕТ БЕЗ РОЗЕТКИ (батарейка) — поэтому НЕ электроприбор (нет cordLength),
+// свечение горит ВСЕГДА, без проверки g.userData.powered. Можно ставить на пол и на
+// любую поверхность (стол, табурет, тумбу, верх серванта) — mountable:true.
+//
+// Красота — в шейдере стеклянной колбы: «лава» нарисована метаболами (нижняя и
+// верхняя лужи + 5 плавающих капель, что медленно поднимаются/опускаются и
+// сливаются), а оттенок ПЕРЕЛИВАЕТСЯ во времени по тёплой «самоцветной» палитре.
+// Собственный PointLight красится тем же оттенком — комната наполняется
+// завораживающим иридесцентным светом, который мягко «дышит» (см. tick).
+// Палитра света (JS-двойник шейдерной pal()) — для синхронного цвета источника.
+function lavaPalette(t) {
+  const TAU = Math.PI * 2;
+  const a = [0.55, 0.40, 0.45], b = [0.45, 0.40, 0.45], d = [0.0, 0.20, 0.45];
+  return [0, 1, 2].map((i) => Math.max(0, a[i] + b[i] * Math.cos(TAU * (t + d[i]))));
+}
+
+export function createLavaLamp() {
+  const g = new THREE.Group();
+  // Усечённый конус (для основания/колпака/колбы): radiusTop, radiusBottom, высота
+  const cone = (rTop, rBot, h, mat, y, seg = 20) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, seg), mat);
+    m.position.y = y;
+    return m;
+  };
+
+  // --- Основание: тяжёлый металлический конус + рёбра + ножка ---
+  g.add(cone(0.075, 0.115, 0.10, metalMaterial, 0.05));        // корпус основания
+  g.add(cone(0.12, 0.12, 0.02, lambert(0x4a4a50), 0.01));      // тёмная ножка-пятак
+  g.add(cone(0.083, 0.083, 0.012, lambert(0x6a6a70), 0.094));  // поясок под колбой
+  // Декоративные рёбра (классический ребристый цоколь лава-лампы)
+  for (const ry of [0.035, 0.062]) g.add(cone(0.1, 0.103, 0.008, lambert(0x6f7178), ry));
+
+  // --- Тёплый «накал» у основания: лампочка под колбой греет лаву (всегда горит) ---
+  const heatMat = lambert(0x000000, { emissive: 0xff7a3a });
+  g.add(cone(0.07, 0.07, 0.01, heatMat, 0.101));
+
+  // --- Стеклянная колба: ShaderMaterial с метаболами «лавы» (центр красоты) ---
+  const GLASS_H = 0.30, R_BOT = 0.085, R_TOP = 0.040;
+  const lavaMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+      varying vec3 vP;
+      void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+    `,
+    fragmentShader: `
+      precision mediump float;
+      uniform float uTime;
+      varying vec3 vP;
+      // Иридесцентная палитра (косинусная, Iñigo Quilez) — тёплые самоцветные тона:
+      // старт — янтарь/огонь, дальше дрейф к розовому, фиалковому, бирюзе и обратно.
+      vec3 pal(float t){
+        return vec3(0.55,0.40,0.45) + vec3(0.45,0.40,0.45)*cos(6.28318*(t + vec3(0.0,0.20,0.45)));
+      }
+      void main(){
+        float ny = clamp(vP.y / ${GLASS_H.toFixed(3)} + 0.5, 0.0, 1.0);   // высота 0..1
+        float rAt = mix(${R_BOT.toFixed(3)}, ${R_TOP.toFixed(3)}, ny);    // радиус колбы на этой высоте
+        float fx = clamp(vP.x / rAt, -1.0, 1.0);                          // -1..1 поперёк колбы
+
+        // Поле метаболов: нижняя лужа + верхняя лужа + 6 плавающих капель.
+        float field = 0.0;
+        field += 0.78 / (1.0 + 6.0*pow((ny-0.03)*3.0, 2.0) + 2.0*fx*fx);  // нижняя лужа
+        field += 0.60 / (1.0 + 6.0*pow((ny-0.98)*3.0, 2.0) + 2.0*fx*fx);  // верхняя лужа
+        for (int i = 0; i < 6; i++){
+          float fi = float(i);
+          float yb = 0.5 + 0.46*sin(uTime*(0.09+0.040*fi) + fi*1.7);      // капля плывёт вверх-вниз
+          float xb = 0.55*sin(uTime*(0.12+0.045*fi) + fi*2.3);           // и качается по горизонтали
+          float dx = fx - xb;
+          float dy = (ny - yb) * 2.0;                                     // капли вытянуты по вертикали
+          field += (0.062 + 0.028*sin(uTime*0.4 + fi)) / (dx*dx + dy*dy + 0.02);
+        }
+        float blob = field / (0.7 + field);                              // мягкое насыщение 0..1
+
+        // Цвет: горячая лава иридесцирует по времени и высоте; между каплями — тёмная остывшая жидкость.
+        vec3 hot   = pal(uTime*0.03 + ny*0.22);
+        vec3 fluid = pal(uTime*0.03 + 0.5) * 0.32;
+        vec3 col = mix(fluid, hot*1.7, blob);
+
+        // Вертикальный стеклянный блик слева + объёмное затемнение к краям силуэта.
+        float streak = smoothstep(0.78, 1.0, -fx) * (0.6 + 0.4*sin(ny*9.0));
+        col += vec3(0.8,0.85,0.95) * streak * 0.18;
+        float edge = smoothstep(1.0, 0.25, abs(fx));
+        col *= 0.45 + 0.55*edge;
+
+        float a = 0.42 + 0.55*blob;                                      // капли плотнее, фон — стекло
+        gl_FragColor = vec4(col, a);
+      }
+    `,
+  });
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(R_TOP, R_BOT, GLASS_H, 24), lavaMat);
+  glass.position.y = 0.10 + GLASS_H / 2; // стоит на основании
+  glass.renderOrder = 2;
+  g.add(glass);
+
+  // --- Металлический колпак сверху (зеркалит основание, расширяется кверху) + кнопка ---
+  const capBase = 0.10 + GLASS_H; // верх колбы
+  g.add(cone(0.07, 0.042, 0.09, metalMaterial, capBase + 0.045));
+  for (const ry of [capBase + 0.085, capBase + 0.075]) g.add(cone(0.066, 0.063, 0.006, lambert(0x6f7178), ry));
+  g.add(cone(0.028, 0.034, 0.025, lambert(0x6a6a70), capBase + 0.10));
+
+  // --- Иридесцентный свет: горит ВСЕГДА (батарейка), цвет дрейфует, мягко «дышит» ---
+  const lavaLight = makeApplianceLight(0xff7a3a, 5.5, [0, 0.10 + GLASS_H / 2, 0]);
+  g.add(lavaLight);
+
+  // game.js зовёт tick(t) каждый кадр. Ток НЕ нужен — без проверки powered.
+  g.userData.tick = (t) => {
+    lavaMat.uniforms.uTime.value = t;
+    const c = lavaPalette(t * 0.03 + 0.08);                  // тот же дрейф, чуть смещён от лавы
+    lavaLight.color.setRGB(c[0], c[1], c[2]);
+    lavaLight.intensity = 2.4 + 0.5 * Math.sin(t * 0.6) + 0.25 * Math.sin(t * 1.7); // «дыхание» лавы
+    heatMat.emissive.setRGB(c[0] * 0.6, c[1] * 0.4, c[2] * 0.32); // тёплый отблеск у основания
+  };
+  return g;
+}
+
 // === Куча строительного мусора: обломки бетона, кирпичи, доска ===
 function createRubblePile() {
   const g = new THREE.Group();
@@ -1571,6 +1689,7 @@ export const MODEL_BUILDERS = {
   tape_player: createTapePlayer,
   aquarium: createAquarium,
   flower_pot: createFlowerPot,
+  lava_lamp: createLavaLamp,
   outlet: createOutlet,
   extension_cord: createExtensionCord,
   reno_parquet: createRenoParquet,
