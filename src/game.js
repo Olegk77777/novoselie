@@ -3,18 +3,18 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=49';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=49';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=49';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=49';
-import { createPlacement } from './placement.js?v=49';
-import { createUI } from './ui.js?v=49';
-import { renderItemIcon } from './icon.js?v=49';
-import { createPower } from './power.js?v=49';
-import { evaluateCombos } from './combos.js?v=49';
-import { isQuestDone } from './quests.js?v=49';
-import { createCat } from './cat.js?v=49';
-import { createLighting } from './lighting.js?v=49';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=50';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=50';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=50';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=50';
+import { createPlacement } from './placement.js?v=50';
+import { createUI } from './ui.js?v=50';
+import { renderItemIcon } from './icon.js?v=50';
+import { createPower } from './power.js?v=50';
+import { evaluateCombos } from './combos.js?v=50';
+import { isQuestDone } from './quests.js?v=50';
+import { createCat } from './cat.js?v=50';
+import { createLighting } from './lighting.js?v=50';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -382,6 +382,9 @@ async function init() {
     completeRenoStep(def.applies === 'floor' ? 'floor' : 'walls'); // модал + журнал
     if (renoDone.floor && renoDone.walls) {
       ui.setLocked(unlockAfterReno, false); // ремонт готов — мебель доступна (кроме удлинителя)
+      // Трогательная история про отсутствие потолочного света + первый квест: «принеси свет».
+      // Очередь модалов: «✓ обои» → эта история → подсказка-тост (см. ui.showModal — очередь).
+      ui.showModal(t(locale, 'ui.first_light_text'), t(locale, 'ui.first_light_kicker'), t(locale, 'ui.first_light_ok'));
       ui.showHint(t(locale, 'ui.hint_reno_done'));
     } else {
       ui.showHint(

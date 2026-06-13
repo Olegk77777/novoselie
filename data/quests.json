@@ -1,6 +1,7 @@
 {
   "_comment": "Квесты v0.2. Тексты — в locales/<lang>.json по ключу quests.<id>. Активны первые 2 невыполненных (по порядку). Типы условий (src/quests.js): all — все подусловия conditions истинны (И-условие, напр. «рядом с ТВ И подключён»); placed — предмет стоит; connected — прибор подключён; near — предмет a в maxDist клетках от b; nearWindow — предмет в maxDist от окна; nearWall — предмет в maxDist от стены; onRug — minCount предметов item стоят на ковре rug; seatsNear — у стола table минимум minCount посадочных мест (seats) в радиусе maxDist; placedCount — поставлено минимум count предметов item (для requires). requires (опц.) — условие появления квеста того же формата: квест становится активным только когда requires выполнено (напр. «соседи на ковёр» открывается после установки кресел). reward: comfort — очки уюта, items — дополнительные предметы в панель.",
   "quests": [
+    { "id": "first_light", "type": "connected", "item": "floor_lamp", "reward": { "comfort": 4 } },
     { "id": "mother_in_law", "type": "placed", "item": "bed", "reward": { "comfort": 4 } },
     { "id": "aquarium_gift", "type": "connected", "item": "aquarium", "reward": { "comfort": 4 } },
     { "id": "antenna", "type": "all", "conditions": [{ "type": "nearWindow", "item": "tv", "maxDist": 2 }, { "type": "connected", "item": "tv" }], "reward": { "comfort": 5 } },
