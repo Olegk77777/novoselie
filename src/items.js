@@ -90,10 +90,13 @@ const rotY = (mesh, a) => { mesh.rotation.y = a; return mesh; };
 const EQUALIZER_FRAG = `
   precision mediump float;
   uniform float uTime;
+  uniform float uOn;      // 1 — есть ток (аквалайзер горит), 0 — тёмный дисплей
   varying vec2 vUv;
   float eqHash(float n){ return fract(sin(n * 91.37) * 43758.5453); }
   void main(){
     vec2 uv = vUv;
+    // Нет тока — погасший дисплей (едва различимый тёмно-зелёный)
+    if (uOn < 0.5) { gl_FragColor = vec4(0.012, 0.028, 0.014, 1.0); return; }
     float bars = 7.0;
     float bx = uv.x * bars;
     float col = floor(bx);
@@ -132,6 +135,7 @@ const TV_FRAG = `
   uniform float uTime;
   uniform float uChannel;
   uniform float uStatic;
+  uniform float uOn;      // 1 — есть ток (экран работает), 0 — тёмное стекло
   varying vec2 vUv;
 
   // --- общие хелперы (доступны всем каналам) ---
@@ -765,6 +769,17 @@ const TV_FRAG = `
     float t = uTime;
     vec2 uv = vUv;
 
+    // Нет тока — тёмное выключенное стекло кинескопа (лёгкое холодное отражение + блик)
+    if (uOn < 0.5) {
+      vec3 off = vec3(0.015, 0.016, 0.022);
+      off += vec3(0.020, 0.025, 0.035) * smoothstep(1.0, 0.0, uv.y);                                  // отблеск сверху
+      off += vec3(0.06, 0.07, 0.09) * smoothstep(0.55, 0.0, abs((uv.x - uv.y) + 0.25)) * 0.5;          // косой блик
+      vec2 qo = (uv - 0.5) * 2.0;
+      off *= mix(0.5, 1.0, smoothstep(1.6, 0.2, dot(qo, qo)));                                          // виньетка
+      gl_FragColor = vec4(off, 1.0);
+      return;
+    }
+
     // лёгкая дрожь строки (горизонтальный джиттер аналогового сигнала)
     float lineJit = (hash11(floor(uv.y * 200.0) + floor(t * 12.0)) - 0.5) * 0.004;
     uv.x += lineJit;
@@ -1003,7 +1018,7 @@ export function createTV() {
   g.add(box(0.42, 0.32, 0.02, lambert(0x141418), -0.07, 0.3, 0.235));
   // Включённый экран: анимированный шейдер — «90-е по телевизору» под плохим
   // аналоговым сигналом. Светится сам (unlit), как настоящий кинескоп в тёмной комнате.
-  const tvUniforms = { uTime: { value: 0 }, uChannel: { value: 0 }, uStatic: { value: 0 } };
+  const tvUniforms = { uTime: { value: 0 }, uChannel: { value: 0 }, uStatic: { value: 0 }, uOn: { value: 1 } };
   const tvMat = new THREE.ShaderMaterial({
     uniforms: tvUniforms,
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -1025,11 +1040,16 @@ export function createTV() {
   // короткий всплеск помех; плюс редкие самопроизвольные просадки сигнала. ===
   const CH_COUNT = 11;
   let curChannel = 0;          // стартуем с настроечной таблицы (и для иконки в панели)
-  let started = false;
+  let started = false, wasOn = false;
   let nextSwitch = 0, nextDropout = 0, staticUntil = 0;
   g.userData.tick = (t) => {
     tvUniforms.uTime.value = t;
+    // Телевизор работает только при наличии тока (game.js ставит userData.powered)
+    const on = !!g.userData.powered;
+    tvUniforms.uOn.value = on ? 1.0 : 0.0;
+    if (!on) { wasOn = false; started = false; return; } // нет тока — тёмное стекло
     if (!started) { started = true; nextSwitch = t + 6 + Math.random() * 5; nextDropout = t + 4 + Math.random() * 8; }
+    if (!wasOn) { staticUntil = t + 0.4; wasOn = true; }  // только что включился — миг прогрева (помехи)
     if (t >= nextSwitch) {
       let ch = curChannel;
       while (ch === curChannel) ch = Math.floor(Math.random() * CH_COUNT);
@@ -1176,7 +1196,7 @@ export function createTapePlayer() {
   // === Зелёный аквалайзер: ретро-сегментный дисплей по центру корпуса ===
   // Тёмная окантовка + светящаяся панель со скачущими столбиками (шейдер).
   g.add(box(0.25, 0.085, 0.012, lambert(0x080d08), 0, 0.135, 0.135));
-  const eqUniforms = { uTime: { value: 0 } };
+  const eqUniforms = { uTime: { value: 0 }, uOn: { value: 1 } };
   const eqMat = new THREE.ShaderMaterial({
     uniforms: eqUniforms,
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -1185,8 +1205,11 @@ export function createTapePlayer() {
   const eqScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.225, 0.062), eqMat);
   eqScreen.position.set(0, 0.135, 0.142);
   g.add(eqScreen);
-  // game.js зовёт tick(t) каждый кадр — крутим время аквалайзера
-  g.userData.tick = (t) => { eqUniforms.uTime.value = t; };
+  // game.js зовёт tick(t) каждый кадр: время крутим всегда, но горит только при токе
+  g.userData.tick = (t) => {
+    eqUniforms.uTime.value = t;
+    eqUniforms.uOn.value = g.userData.powered ? 1.0 : 0.0; // аквалайзер горит только при наличии тока
+  };
   return g;
 }
 
