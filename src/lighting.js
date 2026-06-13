@@ -58,23 +58,25 @@ export function createLighting(scene, opts = {}) {
   win.shadow.camera.far = 32;
   win.shadow.bias = -0.0005;
   win.shadow.normalBias = 0.02;
-  win.shadow.radius = 4; // мягче край тени (в связке с поднятым fill тени не резкие)
+  win.shadow.radius = 4; // мягче край тени
   scene.add(win);
 
-  // FILL — нейтральный отскок спереди (без тени): подсвечивает обращённые к зрителю грани
-  // и дальнюю стену, снимает контраст. Чуть нейтральнее холодного окна.
-  const fill = new THREE.DirectionalLight(0x4c5566, 0.34);
-  fill.position.set(-4, 3, 8);
-  fill.target.position.set(0, 0.7, -1);
-  scene.add(fill.target);
-  scene.add(fill);
+  // WINDOW SPILL — ВИДИМЫЙ поток света из окна в комнату: широкий мягкий конус на пол перед
+  // окном. Это и делает окно ОЩУТИМЫМ главным источником (на полу — пятно света, как в кино),
+  // а не просто ярким прямоугольником. Цвет и яркость реактивны (= оконному свету), decay 1 —
+  // мягкий широкий спад. Без тени (единственный кастер — направленный win).
+  const winSpill = new THREE.SpotLight(0xaecbf2, 0, 16, 1.0, 0.9, 1.0);
+  winSpill.position.set(0, 2.8, -4.8); // над/за окном (дальняя стена z≈-4)
+  winSpill.target.position.set(0, 0, 0.8); // на пол, вглубь комнаты — поток достаёт дальше
+  scene.add(winSpill.target);
+  winSpill.castShadow = false;
+  scene.add(winSpill);
 
-  // DOOR — мягкий ТЁПЛЫЙ свет из дверного проёма (лампочка в коридоре квартиры). Второй
-  // тёплый якорь — контраст холодному окну, как у Хоппера «свет из соседней комнаты».
-  // Конус-прожектор из коридора (из-за левой стены) в комнату; без тени (один кастер — окно).
-  const door = new THREE.SpotLight(0xf6c98c, 18.0, 7.5, 0.7, 0.6, 2.0);
+  // DOOR — мягкий НЕЙТРАЛЬНЫЙ свет из дверного проёма (свет из коридора квартиры). Рассеянный
+  // широкий конус (большая penumbra), без тени. НЕ жёлтый — нейтральный, чтобы не спорил с окном.
+  const door = new THREE.SpotLight(0xd2d6de, 16.0, 9.0, 0.85, 0.92, 2.0);
   door.position.set(doorX - 0.4, 1.7, doorZ); // чуть за стеной, на высоте дверного проёма
-  door.target.position.set(doorX + 2.6, 0.2, doorZ + 0.4); // вперёд-вниз в комнату → лужица у входа
+  door.target.position.set(doorX + 2.8, 0.2, doorZ + 0.4); // вперёд-вниз в комнату → мягкая лужица у входа
   scene.add(door.target);
   door.castShadow = false;
   scene.add(door);
@@ -103,7 +105,9 @@ export function createLighting(scene, opts = {}) {
     // прибраться), без сезонной математики (картинка за стеклом ещё не идёт).
     if (!hasWindow) {
       win.color.setHex(0x9ab0d0);
-      win.intensity = 0.9;
+      win.intensity = 1.3;
+      winSpill.color.setHex(0x9ab0d0);
+      winSpill.intensity = 7.0; // холодный поток из пустого проёма (видно прибраться)
       hemi.color.setHex(0x45526e);
       hemi.intensity = 0.7;
       return;
@@ -149,17 +153,19 @@ export function createLighting(scene, opts = {}) {
     scratch.lerp(C_RAIN, rainRaw * 0.4);
     scratch.lerp(C_MOON, moonWash * 0.6);
     win.color.copy(scratch);
+    winSpill.color.copy(scratch); // поток из окна — того же цвета, что оконный свет
 
-    // --- яркость направленного окна (мотивированный «ключ»): даёт форму и мягкую тень,
-    //     но НЕ доминирует — основное заполнение мягко тянет HEMI (меньше контраста) ---
-    const winI = 1.25 * dayF * clarity + duskMix * 0.85 * clarity + moonWash * 0.55 + 0.06;
-    win.intensity = winI * mood;
+    // --- яркость направленного окна (даёт форму и мягкую тень) ---
+    win.intensity = (2.0 * dayF * clarity + duskMix * 1.0 * clarity + moonWash * 0.6 + 0.06) * mood;
 
-    // --- HEMI — рассеянное заполнение, покрывает всю комнату; заметно дышит сутками ---
-    hemi.intensity = 0.55 + 0.45 * dayF + 0.12 * moonWash;
+    // --- ВИДИМЫЙ поток из окна на пол — основная «масса» света от окна (decay 1, широкий) ---
+    winSpill.intensity = (16.0 * dayF * clarity + duskMix * 8.0 * clarity + moonWash * 4.5) * mood;
+
+    // --- HEMI — мягкое рассеянное заполнение, покрывает всю комнату; дышит сутками ---
+    hemi.intensity = 0.5 + 0.4 * dayF + 0.12 * moonWash;
     scratch2.copy(HEMI_NIGHT).lerp(HEMI_DAY, dayF);
     hemi.color.copy(scratch2);
   }
 
-  return { hemi, win, fill, door, update, lowEnd: LOW_END };
+  return { hemi, win, winSpill, door, update, lowEnd: LOW_END };
 }

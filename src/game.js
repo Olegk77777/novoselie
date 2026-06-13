@@ -3,18 +3,18 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=52';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=52';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=52';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=52';
-import { createPlacement } from './placement.js?v=52';
-import { createUI } from './ui.js?v=52';
-import { renderItemIcon } from './icon.js?v=52';
-import { createPower } from './power.js?v=52';
-import { evaluateCombos } from './combos.js?v=52';
-import { isQuestDone } from './quests.js?v=52';
-import { createCat } from './cat.js?v=52';
-import { createLighting } from './lighting.js?v=52';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=53';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=53';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=53';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=53';
+import { createPlacement } from './placement.js?v=53';
+import { createUI } from './ui.js?v=53';
+import { renderItemIcon } from './icon.js?v=53';
+import { createPower } from './power.js?v=53';
+import { evaluateCombos } from './combos.js?v=53';
+import { isQuestDone } from './quests.js?v=53';
+import { createCat } from './cat.js?v=53';
+import { createLighting } from './lighting.js?v=53';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
