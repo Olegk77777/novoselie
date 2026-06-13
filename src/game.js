@@ -3,18 +3,18 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=48';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=48';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=48';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=48';
-import { createPlacement } from './placement.js?v=48';
-import { createUI } from './ui.js?v=48';
-import { renderItemIcon } from './icon.js?v=48';
-import { createPower } from './power.js?v=48';
-import { evaluateCombos } from './combos.js?v=48';
-import { isQuestDone } from './quests.js?v=48';
-import { createCat } from './cat.js?v=48';
-import { createLighting } from './lighting.js?v=48';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=49';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=49';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=49';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=49';
+import { createPlacement } from './placement.js?v=49';
+import { createUI } from './ui.js?v=49';
+import { renderItemIcon } from './icon.js?v=49';
+import { createPower } from './power.js?v=49';
+import { evaluateCombos } from './combos.js?v=49';
+import { isQuestDone } from './quests.js?v=49';
+import { createCat } from './cat.js?v=49';
+import { createLighting } from './lighting.js?v=49';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -63,9 +63,9 @@ async function init() {
   // Изометрическая камера: сама вписывает комнату в экран
   const { camera, resize: resizeCamera, zoomBy, setReservedLeft, updateCameraAnim } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
 
-  // Свет: фотографическая трёхточка (key/fill/rim) + полусфера + реактивный «свет от окна».
-  // Вся логика — в src/lighting.js. Заполняющий/боковой/фронтальный/контровой; контровой
-  // реагирует на оконный шейдер (день/закат/ночь/сезон/полнолуние/дождь).
+  // Свет: эстетика Хоппера / Limbo-в-цвете. Главное заполнение — ОТ ОКНА (холодное),
+  // полумрак синеватый, тепло — только от приборов (контраст). Вся логика в src/lighting.js;
+  // оконный свет реагирует на шейдер окна (день/закат/ночь/сезон/полнолуние/дождь).
   const lighting = createLighting(scene);
 
   // Пол, сетка, стены. На старте — голый бетон: паркет и обои кладутся при ремонте.
@@ -97,7 +97,7 @@ async function init() {
   // тенями — главный убийца fps. 2 достаточно для резкости.
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  // Тени: одна мягкая тень от KEY-света. autoUpdate=false — карта теней пересчитывается
+  // Тени: одна мягкая тень от оконного света. autoUpdate=false — карта теней пересчитывается
   // НЕ каждый кадр, а только когда меняется расстановка (bumpShadows) — экономия для iPad.
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -554,7 +554,7 @@ async function init() {
     updateCameraAnim(dt); // плавный «переезд» комнаты (режим любования)
     // Окно «живёт»: сутки за окном идут по кругу (день → закат → ночь → рассвет)
     if (windowGlass) windowGlass.uniforms.uTime.value = time;
-    // Свет комнаты реагирует на окно: контровой/полусфера пересчитываются из того же
+    // Свет комнаты реагирует на окно: оконный свет/полусфера пересчитываются из того же
     // времени (день холодный → закат янтарь → ночь тьма + серебро луны → дождь свинец).
     lighting.update(time, !!windowGlass);
     // Анимированные предметы (аквариум: вода, рыбки, пузырьки) — у кого есть tick
