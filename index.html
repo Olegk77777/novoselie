@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- Заголовок вкладки подставляется из locales/ru.json при запуске игры -->
   <title>...</title>
+
+  <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
+  <link rel="stylesheet" href="design/colors.css?v=41">
+  <link rel="stylesheet" href="design/type.css?v=41">
+
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
     html, body {
@@ -12,11 +17,20 @@
       padding: 0;
       overflow: hidden;
       height: 100%;
-      background: #1a1a2e;
+      background: var(--bg-dusk);
     }
     canvas { display: block; }
-    /* Кнопки действий и сворачивания — в правом верхнем углу (там пусто,
-       не перекрывают низ комнаты, куда ставятся предметы). */
+
+    /* ============================================================
+       Гибрид «Уют»: тёмное «стекло» (B) для мира/HUD + тёплая
+       «бумага ЖЭКа» (A) для всего, что обращается к игроку.
+       Раскладка элементов сохранена — поменялись только материи.
+       ============================================================ */
+
+    /* --- Стеклянная пластина (база для HUD-элементов B) --- */
+    /* используется в шкале уюта, кнопках, «Свернуть», модале */
+
+    /* Кнопки действий и сворачивания — в правом верхнем углу. */
     #ui-top {
       position: fixed;
       top: 14px;
@@ -27,8 +41,7 @@
       gap: 8px;
       z-index: 5;
     }
-    /* Низ — только панель предметов, по центру. Кнопка «Свернуть» прижата влево
-       (над первой иконкой), чтобы не мешать обзору центра комнаты. */
+    /* Низ — панель предметов по центру; «Свернуть» прижата влево. */
     #ui-bottom {
       position: fixed;
       bottom: 12px;
@@ -40,12 +53,12 @@
       gap: 8px;
       max-width: 96vw;
     }
-    /* Обёртка панели — для стрелок-индикаторов прокрутки по краям */
     #ui-panel-wrap {
       position: relative;
       max-width: 100%;
     }
-    /* Панель предметов (при нехватке места прокручивается по горизонтали) */
+
+    /* === Панель предметов — прозрачное стекло с размытием === */
     #ui-panel {
       display: flex;
       align-items: flex-start;
@@ -53,32 +66,31 @@
       padding: 10px 12px;
       max-width: 100%;
       overflow-x: auto;
-      background: rgba(20, 20, 40, 0.85);
-      border: 1px solid #4a4a6a;
-      border-radius: 8px;
-      color: #f0e6d2;
-      font-family: monospace;
+      background: linear-gradient(180deg, var(--panel-trans), var(--panel-trans-2));
+      border: 1px solid var(--panel-stroke);
+      border-top-color: rgba(232, 185, 106, 0.16);
+      border-radius: var(--r-plate);
+      box-shadow: 0 -8px 26px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      color: var(--text-cream);
       user-select: none;
       scrollbar-width: auto;
-      scrollbar-color: #c9b88f rgba(0, 0, 0, 0.25);
+      scrollbar-color: var(--amber) rgba(0, 0, 0, 0.3);
     }
-    #ui-panel.collapsed {
-      display: none;
-    }
-    /* Заметная полоса прокрутки (вместо тёмной, сливающейся с фоном) */
-    #ui-panel::-webkit-scrollbar {
-      height: 11px;
-    }
+    #ui-panel.collapsed { display: none; }
+    #ui-panel::-webkit-scrollbar { height: 11px; }
     #ui-panel::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.25);
+      background: rgba(0, 0, 0, 0.3);
       border-radius: 6px;
     }
     #ui-panel::-webkit-scrollbar-thumb {
-      background: #c9b88f;
+      background: linear-gradient(var(--amber), var(--amber-deep));
       border-radius: 6px;
-      border: 1px solid #8a7a5a;
+      border: 1px solid var(--amber-deep);
     }
-    /* Стрелки-индикаторы прокрутки по краям панели */
+
+    /* Стрелки-индикаторы прокрутки — амбер на тёмном */
     .ui-scroll-arrow {
       position: absolute;
       top: 50%;
@@ -88,38 +100,36 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 34px;
+      font-size: 30px;
       font-weight: bold;
       line-height: 1;
-      color: #1a1a2e;
-      background: rgba(240, 230, 210, 0.94);
-      border: 1px solid #b9a98a;
-      border-radius: 8px;
+      color: var(--amber);
+      background: rgba(232, 185, 106, 0.1);
+      border: 1px solid var(--panel-stroke);
+      border-radius: 9px;
       cursor: pointer;
       z-index: 3;
     }
-    .ui-scroll-left {
-      left: 6px;
-    }
-    .ui-scroll-right {
-      right: 6px;
-    }
-    .ui-scroll-arrow[hidden] {
-      display: none;
-    }
-    /* Кнопка свернуть/развернуть панель — выровнена с первой иконкой панели */
+    .ui-scroll-left { left: 6px; }
+    .ui-scroll-right { right: 6px; }
+    .ui-scroll-arrow[hidden] { display: none; }
+
+    /* Кнопка свернуть/развернуть — стекло, амбер-текст */
     #ui-toggle {
       margin-left: 12px;
-      padding: 8px 20px;
-      background: #f0e6d2;
-      border: 1px solid #b9a98a;
-      border-radius: 8px;
-      color: #1a1a2e;
-      font-family: monospace;
-      font-size: 15px;
-      font-weight: bold;
+      padding: 9px 20px;
+      background: linear-gradient(160deg, var(--panel-glass), var(--panel-glass-2));
+      border: 1px solid var(--panel-stroke);
+      border-radius: var(--r-btn);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.4);
+      color: var(--amber);
+      font-family: var(--font-ui);
+      font-size: var(--fs-ui);
+      font-weight: 600;
       cursor: pointer;
     }
+
+    /* === Ячейка предмета === */
     .ui-slot-wrap {
       flex: 0 0 auto;
       width: 88px;
@@ -127,175 +137,310 @@
     .ui-slot {
       position: relative;
       width: 76px;
-      height: 76px;
+      height: 84px;
       margin: 0 auto;
       display: block;
-      background: #2d2d44;
-      border: 2px solid #6a6a8a;
-      border-radius: 6px;
+      background: linear-gradient(160deg, rgba(29, 29, 46, 0.7), rgba(18, 18, 30, 0.7));
+      border: 1px solid #3a3550;
+      border-radius: var(--r-cell);
       cursor: pointer;
       color: inherit;
-      padding: 3px;
+      padding: 4px;
+    }
+    .ui-slot:hover {
+      border-color: var(--panel-stroke-2);
     }
     .ui-slot.empty {
-      opacity: 0.35;
+      opacity: 0.4;
       border-style: dashed;
+      background: rgba(15, 15, 24, 0.4);
       cursor: default;
     }
+    /* отключена (0 шт, но включена логикой) — поблёкла */
     .ui-slot.disabled {
       opacity: 0.45;
-      border-style: dotted;
+      filter: grayscale(0.6);
+    }
+    /* заблокирована до ремонта — пунктир + замок, иконку прячем */
+    .ui-slot.locked {
+      border-style: dashed;
+      border-color: #3a3550;
+      background: rgba(15, 15, 24, 0.5);
+      opacity: 1;
+      filter: none;
+    }
+    .ui-slot.locked .ui-slot-img { visibility: hidden; }
+    .ui-slot.locked::after {
+      content: '🔒';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+      color: var(--locked);
     }
     .ui-slot-img {
       width: 100%;
       height: 100%;
       object-fit: contain;
-      pointer-events: none; /* клики ловит сама кнопка-ячейка */
+      pointer-events: none;
     }
+    /* Бейдж количества — амбер-плашка с тёмными цифрами */
     .ui-slot-badge {
       position: absolute;
-      top: 2px;
-      right: 2px;
-      font-size: 14px;
-      font-weight: bold;
-      padding: 1px 5px;
-      background: rgba(10, 10, 20, 0.8);
-      border-radius: 4px;
+      top: 5px;
+      right: 5px;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 5px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-num);
+      font-size: 12px;
+      font-weight: 800;
+      color: #2a1c0e;
+      background: linear-gradient(var(--amber), var(--amber-deep));
+      border-radius: 6px;
+      box-shadow: 0 0 8px var(--glow-amber);
       pointer-events: none;
     }
     .ui-slot-label {
-      font-size: 13px;
+      font-family: var(--font-paper);
+      font-size: var(--fs-cell);
+      color: var(--text-cream-dim);
       text-align: center;
-      margin-top: 4px;
+      margin-top: 5px;
       overflow-wrap: break-word;
     }
-    /* Кнопки действий — вертикальным столбиком в правом верхнем углу */
+
+    /* === Кнопки действий (стекло) === */
     #ui-actions {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
       gap: 8px;
     }
-    /* display: flex перебивает атрибут hidden — возвращаем скрытие явно */
-    #ui-actions[hidden] {
-      display: none;
-    }
+    #ui-actions[hidden] { display: none; }
     .ui-btn {
-      padding: 13px 20px;
-      background: #f0e6d2;
-      border: 1px solid #b9a98a;
-      border-radius: 6px;
-      color: #1a1a2e;
-      font-family: inherit;
-      font-size: 16px;
-      font-weight: bold;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 18px;
+      background: linear-gradient(160deg, var(--panel-glass), var(--panel-glass-2));
+      border: 1px solid var(--panel-stroke-2);
+      border-radius: var(--r-btn);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+      color: var(--text-cream);
+      font-family: var(--font-ui);
+      font-size: var(--fs-ui);
+      font-weight: 600;
       cursor: pointer;
     }
-    /* Левая колонка: шкала уюта + журнал заданий */
+    .ui-btn:hover {
+      border-color: var(--amber);
+      background: linear-gradient(160deg, rgba(40, 38, 58, 0.95), rgba(24, 24, 38, 0.97));
+      box-shadow: 0 0 16px rgba(232, 185, 106, 0.25), 0 6px 14px rgba(0, 0, 0, 0.45);
+      color: #fff4dd;
+    }
+    .ui-btn:active {
+      background: linear-gradient(160deg, rgba(16, 16, 26, 0.97), rgba(10, 10, 18, 0.98));
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+      color: var(--amber);
+      transform: translateY(1px);
+    }
+    .ui-btn-ico { color: var(--amber); font-size: 1.2em; line-height: 1; }
+
+    /* === Левая колонка: шкала уюта + журнал + бонусы === */
     #ui-left {
       position: fixed;
       top: 14px;
       left: 14px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
       z-index: 4;
       pointer-events: none;
+      max-width: 250px;
     }
+
+    /* Шкала уюта — стеклянная пластина */
     #ui-comfort {
-      padding: 8px 12px;
-      background: rgba(20, 20, 40, 0.85);
-      border: 1px solid #4a4a6a;
-      border-radius: 8px;
-      color: #f0e6d2;
-      font-family: monospace;
-      font-size: 13px;
+      padding: 12px 16px 14px;
+      background: linear-gradient(160deg, rgba(28, 28, 43, 0.92), rgba(16, 16, 26, 0.95));
+      border: 1px solid var(--panel-stroke);
+      border-radius: var(--r-plate);
+      box-shadow: 0 0 0 1px rgba(232, 185, 106, 0.1),
+                  0 10px 24px rgba(0, 0, 0, 0.5),
+                  inset 0 0 32px rgba(201, 127, 61, 0.1);
       user-select: none;
     }
-    /* Журнал заданий */
-    #ui-quests {
-      padding: 8px 12px;
-      background: rgba(20, 20, 40, 0.85);
-      border: 1px solid #4a4a6a;
-      border-radius: 8px;
-      color: #f0e6d2;
-      font-family: monospace;
-      font-size: 12px;
-      max-width: 230px;
-      user-select: none;
+    .ui-comfort-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
     }
-    .ui-quests-title {
-      font-weight: bold;
-      font-size: 13px;
-    }
-    .ui-quest-line {
-      margin-top: 5px;
-      line-height: 1.4;
-      color: #e8d9b0;
+    .ui-comfort-label {
+      font-family: var(--font-stamp);
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--amber);
     }
     .ui-comfort-value {
-      opacity: 0.85;
+      font-family: var(--font-num);
+      font-weight: 700;
+      font-size: var(--fs-meter);
+      color: var(--text-cream);
+      letter-spacing: 1px;
+      white-space: nowrap;
     }
+    .ui-comfort-total { color: var(--text-muted); }
     .ui-comfort-bar {
-      width: 140px;
-      height: 10px;
-      margin-top: 6px;
-      background: #2d2d44;
-      border: 1px solid #6a6a8a;
-      border-radius: 5px;
+      height: 15px;
+      margin-top: 9px;
+      padding: 3px;
+      background: var(--well);
+      border-radius: 6px;
+      box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.7);
       overflow: hidden;
     }
     .ui-comfort-fill {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #c97f3d, #e8b96a);
-      transition: width 0.4s ease; /* полоска растёт плавно */
+      border-radius: 4px;
+      background: var(--accent-grad);
+      box-shadow: 0 0 12px var(--glow-amber);
+      transition: width 0.4s ease;
     }
-    /* Список активных бонусов за сочетания — под полоской уюта */
-    .ui-combos {
+
+    /* Журнал заданий — бумажный слип ЖЭКа со скрепкой */
+    #ui-quests {
+      position: relative;
+      padding: 14px 16px 15px;
+      background: linear-gradient(165deg, var(--paper), var(--paper-2));
+      border: 1px solid var(--paper-edge);
+      border-radius: 3px;
+      box-shadow: var(--shadow-paper);
+      color: var(--ink);
+      transform: rotate(-1.2deg);
+      user-select: none;
+    }
+    /* скрепка сверху */
+    #ui-quests::before {
+      content: '';
+      position: absolute;
+      top: -13px;
+      left: 18%;
+      width: 24px;
+      height: 32px;
+      border: 4px solid #9aa0a6;
+      border-bottom: none;
+      border-radius: 11px 11px 0 0;
+      transform: rotate(8deg);
+    }
+    .ui-quests-title {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      border-bottom: 1px dashed var(--paper-line);
+      padding-bottom: 8px;
+      margin-bottom: 9px;
+    }
+    .ui-quests-label {
+      font-family: var(--font-stamp);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--stamp);
+    }
+    .ui-quests-count {
+      font-family: var(--font-paper);
+      font-size: 13px;
+      color: var(--ink-soft);
+    }
+    .ui-quest-line {
+      display: flex;
+      gap: 8px;
+      font-family: var(--font-paper);
+      font-size: var(--fs-paper);
+      line-height: 1.45;
       margin-top: 6px;
-      font-size: 12px;
-      line-height: 1.6;
-      color: #e8d9b0;
-      max-width: 210px;
+      color: var(--ink);
     }
-    /* Крупная подсказка-тост сверху экрана */
+    .ui-quest-check { color: var(--stamp); font-weight: 700; }
+
+    /* Бонус-чипы — бумажные полоски с тёплым кантом */
+    .ui-combos {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ui-combo-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: linear-gradient(#f3ecd9, #e7dabb);
+      border: 1px solid var(--paper-edge);
+      border-left: 5px solid var(--amber-deep);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.4);
+      color: var(--ink);
+    }
+    .ui-combo-line:nth-child(odd) { transform: rotate(-0.6deg); }
+    .ui-combo-line:nth-child(even) { transform: rotate(0.5deg); }
+    .ui-combo-amount {
+      font-family: var(--font-num);
+      font-weight: 800;
+      font-size: 15px;
+      color: #b06a26;
+    }
+    .ui-combo-name { font-family: var(--font-paper); font-size: 13px; }
+
+    /* === Подсказка-тост — бумажный слип со «скотчем» === */
     #ui-hint-toast {
       position: fixed;
       top: 14px;
       left: 50%;
-      transform: translateX(-50%);
-      padding: 10px 18px;
-      background: rgba(20, 20, 40, 0.9);
-      border: 1px solid #6a6a8a;
-      border-radius: 8px;
-      color: #f0e6d2;
-      font-family: monospace;
-      font-size: 15px;
+      transform: translateX(-50%) rotate(-0.5deg);
+      padding: 11px 24px;
+      background: linear-gradient(#f4edd9, #e7dabb);
+      border: 1px solid var(--paper-edge);
+      border-radius: 2px;
+      box-shadow: 0 9px 20px rgba(0, 0, 0, 0.5);
+      color: var(--ink);
+      font-family: var(--font-paper);
+      font-size: var(--fs-paper);
       text-align: center;
       max-width: 90vw;
-      pointer-events: none; /* не перехватывает клики по сцене */
+      pointer-events: none;
     }
-    #ui-hint-toast.flash {
-      animation: hint-flash 0.5s ease;
+    /* «скотч» сверху */
+    #ui-hint-toast::before {
+      content: '';
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%) rotate(-3deg);
+      width: 58px;
+      height: 14px;
+      background: var(--tape);
+      border: 1px solid rgba(138, 47, 40, 0.25);
     }
-    /* На неширких экранах тост опускается ниже шкалы уюта, чтобы не перекрывались */
+    #ui-hint-toast.flash { animation: hint-flash 0.5s ease; }
     @media (max-width: 900px) {
-      #ui-hint-toast {
-        top: 78px;
-      }
+      #ui-hint-toast { top: 92px; }
     }
     @keyframes hint-flash {
-      0% {
-        transform: translateX(-50%) scale(1.12);
-        background: rgba(90, 90, 140, 0.95);
-      }
-      100% {
-        transform: translateX(-50%) scale(1);
-      }
+      0% { transform: translateX(-50%) rotate(-0.5deg) scale(1.12); }
+      100% { transform: translateX(-50%) rotate(-0.5deg) scale(1); }
     }
-    /* Модальное уведомление — крупно по центру, для важных событий (квесты).
-       Появляется, игрок читает и жмёт ОК, затем сообщение уходит в боковую панель. */
+
+    /* === Модальное окно — стекло + сканлайны + бумажный кикер === */
     #ui-modal {
       position: fixed;
       inset: 0;
@@ -305,58 +450,96 @@
       justify-content: center;
       background: rgba(12, 10, 22, 0.74);
     }
-    #ui-modal[hidden] {
-      display: none;
-    }
+    #ui-modal[hidden] { display: none; }
     .ui-modal-card {
-      background: rgba(34, 32, 56, 0.98);
-      border: 2px solid #c9b88f;
-      border-radius: 14px;
-      padding: 30px 38px;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(160deg, #1c1c2b, #14141f);
+      border: 1px solid var(--panel-stroke);
+      border-radius: var(--r-modal);
+      padding: 28px 34px 26px;
       max-width: 560px;
       text-align: center;
-      box-shadow: 0 14px 50px rgba(0, 0, 0, 0.6);
-      font-family: monospace;
+      box-shadow: 0 0 0 1px rgba(232, 185, 106, 0.12),
+                  var(--shadow-deep),
+                  inset 0 0 60px rgba(201, 127, 61, 0.1);
     }
+    /* тонкие линии развёртки (CRT-нюанс) */
+    .ui-modal-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 3px);
+      pointer-events: none;
+    }
+    /* зелёный вариант — «задание выполнено» */
+    .ui-modal-card.done {
+      background: linear-gradient(160deg, #1c2b1f, #14180f);
+      border-color: #4a6048;
+      box-shadow: 0 0 0 1px rgba(111, 143, 78, 0.18),
+                  var(--shadow-deep),
+                  inset 0 0 60px rgba(111, 143, 78, 0.1);
+    }
+    /* кикер — бумажный штамп */
     .ui-modal-kicker {
-      color: #e8b96a;
-      font-size: 15px;
-      font-weight: bold;
-      letter-spacing: 0.08em;
+      position: relative;
+      display: inline-block;
+      transform: rotate(-1.5deg);
+      background: linear-gradient(#f4edd9, #e7dabb);
+      border: 1px solid var(--paper-edge);
+      padding: 4px 14px;
+      font-family: var(--font-stamp);
       text-transform: uppercase;
-      margin-bottom: 10px;
+      letter-spacing: 0.13em;
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--stamp);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      margin-bottom: 14px;
+    }
+    .ui-modal-card.done .ui-modal-kicker {
+      background: linear-gradient(#eef0d9, #dde2bb);
+      border-color: #b4bd8a;
+      color: #46612e;
     }
     .ui-modal-text {
-      color: #f0e6d2;
-      font-size: 25px;
-      line-height: 1.5;
-      margin-bottom: 24px;
-      white-space: pre-line; /* переносы \n в тексте (приветствие — строфами) */
+      position: relative;
+      color: var(--text-cream-dim);
+      font-family: var(--font-paper);
+      font-size: clamp(15px, 1.8vw, 19px);
+      line-height: 1.6;
+      margin-bottom: 22px;
+      white-space: pre-line; /* переносы в приветствии — строфами */
     }
     .ui-modal-ok {
-      padding: 12px 50px;
-      background: linear-gradient(180deg, #e8b96a, #c97f3d);
-      border: 1px solid #b9a98a;
-      border-radius: 9px;
-      color: #2a1e10;
-      font-family: inherit;
-      font-size: 20px;
-      font-weight: bold;
+      position: relative;
+      padding: 12px 26px;
+      background: linear-gradient(var(--amber), var(--amber-deep));
+      border: none;
+      border-radius: var(--r-btn);
+      color: #2a1c0e;
+      font-family: var(--font-ui);
+      font-size: var(--fs-ui);
+      font-weight: 700;
+      box-shadow: 0 0 18px rgba(232, 185, 106, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45);
       cursor: pointer;
     }
-    .ui-modal-card.pop {
-      animation: modal-pop 0.32s ease;
+    .ui-modal-card.done .ui-modal-ok {
+      background: linear-gradient(#a7c47e, #6f8f4e);
+      color: #1c2410;
+      box-shadow: 0 0 18px rgba(111, 143, 78, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
     }
+    .ui-modal-card.pop { animation: modal-pop 0.32s ease; }
     @keyframes modal-pop {
       0% { transform: scale(0.82); opacity: 0; }
       60% { transform: scale(1.04); }
       100% { transform: scale(1); opacity: 1; }
     }
     @media (max-width: 900px) {
-      .ui-modal-text { font-size: 21px; }
-      .ui-modal-card { padding: 24px 26px; max-width: 88vw; }
+      .ui-modal-card { padding: 24px 24px; max-width: 88vw; }
     }
-    /* Плашка с ошибкой — показывается, только если игра не смогла запуститься */
+
+    /* Плашка ошибки — показывается, только если игра не запустилась */
     #error-overlay {
       display: none;
       position: fixed;
@@ -364,12 +547,14 @@
       left: 50%;
       transform: translate(-50%, -50%);
       padding: 16px 24px;
-      background: #2d2d44;
-      color: #f0e6d2;
-      font-family: monospace;
-      border: 2px solid #f0e6d2;
+      background: var(--panel-glass);
+      color: var(--text-cream);
+      font-family: var(--font-ui);
+      border: 1px solid var(--panel-stroke);
+      border-radius: var(--r-btn);
     }
   </style>
+
   <!-- importmap говорит браузеру, где брать Three.js (с CDN, версия зафиксирована) -->
   <script type="importmap">
   {
@@ -383,6 +568,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=40"></script>
+  <script type="module" src="src/game.js?v=41"></script>
 </body>
 </html>

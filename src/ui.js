@@ -6,6 +6,13 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   // Десктоп (есть мышь и наведение) — показываем подписи горячих клавиш на кнопках.
   const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const hotkey = (key) => (isDesktop ? ` (${key})` : '');
+  // Иконка-глиф в кнопке (красится амбером через .ui-btn-ico)
+  const makeIco = (ch) => {
+    const s = document.createElement('span');
+    s.className = 'ui-btn-ico';
+    s.textContent = ch;
+    return s;
+  };
 
   // Тост-подсказка сверху экрана: крупная, чтобы была заметна и на планшете
   const toast = document.createElement('div');
@@ -41,6 +48,8 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
     modalKicker.style.display = kicker ? '' : 'none';
     modalText.textContent = text;
     modalOk.textContent = okLabel || t('ui.ok');
+    // Зелёный вариант — «задание выполнено» (кикер с галочкой)
+    modalCard.classList.toggle('done', !!kicker && kicker.includes('✓'));
     modalOverlay.hidden = false;
     modalCard.classList.remove('pop');
     void modalCard.offsetWidth; // перезапуск анимации появления
@@ -60,18 +69,18 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   comfortBox.id = 'ui-comfort';
   const comfortTitle = document.createElement('div');
   comfortTitle.className = 'ui-comfort-title';
+  const comfortLabel = document.createElement('span');
+  comfortLabel.className = 'ui-comfort-label';
+  comfortLabel.textContent = t('ui.comfort');
   const comfortValue = document.createElement('span');
   comfortValue.className = 'ui-comfort-value';
-  comfortTitle.append(t('ui.comfort') + ' ', comfortValue);
+  comfortTitle.append(comfortLabel, comfortValue);
   const comfortBar = document.createElement('div');
   comfortBar.className = 'ui-comfort-bar';
   const comfortFill = document.createElement('div');
   comfortFill.className = 'ui-comfort-fill';
   comfortBar.appendChild(comfortFill);
-  // Список активных бонусов за сочетания — под полоской уюта
-  const combosList = document.createElement('div');
-  combosList.className = 'ui-combos';
-  comfortBox.append(comfortTitle, comfortBar, combosList);
+  comfortBox.append(comfortTitle, comfortBar);
 
   // Журнал заданий: заголовок со счётчиком и список активных квестов
   const questsBox = document.createElement('div');
@@ -79,11 +88,21 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   questsBox.hidden = true; // появится, когда game.js передаст квесты
   const questsTitle = document.createElement('div');
   questsTitle.className = 'ui-quests-title';
+  const questsLabel = document.createElement('span');
+  questsLabel.className = 'ui-quests-label';
+  questsLabel.textContent = t('ui.quests_title');
+  const questsCount = document.createElement('span');
+  questsCount.className = 'ui-quests-count';
+  questsTitle.append(questsLabel, questsCount);
   const questsList = document.createElement('div');
   questsList.className = 'ui-quests-list';
   questsBox.append(questsTitle, questsList);
 
-  leftColumn.append(comfortBox, questsBox);
+  // Список активных бонусов за сочетания — бумажные чипы под журналом
+  const combosList = document.createElement('div');
+  combosList.className = 'ui-combos';
+
+  leftColumn.append(comfortBox, questsBox, combosList);
   document.body.appendChild(leftColumn);
 
   // Кнопки действий и сворачивания — в правом верхнем углу (там пусто), чтобы
@@ -98,10 +117,10 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   actions.id = 'ui-actions';
   const rotateBtn = document.createElement('button');
   rotateBtn.className = 'ui-btn';
-  rotateBtn.textContent = '⟳ ' + t('ui.rotate') + hotkey('R');
+  rotateBtn.append(makeIco('⟳'), t('ui.rotate') + hotkey('R'));
   const returnBtn = document.createElement('button');
   returnBtn.className = 'ui-btn';
-  returnBtn.textContent = '⤓ ' + t('ui.to_slot') + hotkey('Esc');
+  returnBtn.append(makeIco('⤓'), t('ui.to_slot') + hotkey('Esc'));
   actions.append(rotateBtn, returnBtn);
   actions.hidden = true;
   rotateBtn.addEventListener('click', onRotate);
@@ -203,10 +222,13 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   updateArrows();
 
   function refreshSlot(slot) {
-    slot.button.classList.toggle('empty', slot.count === 0);
-    slot.button.classList.toggle('disabled', !slot.enabled || slot.locked);
-    slot.badge.textContent = slot.count > 1 ? '×' + slot.count : '';
-    slot.img.style.visibility = slot.count > 0 ? 'visible' : 'hidden';
+    const locked = slot.locked;
+    slot.button.classList.toggle('locked', locked);
+    slot.button.classList.toggle('empty', slot.count === 0 && !locked);
+    slot.button.classList.toggle('disabled', !slot.enabled && !locked);
+    slot.badge.textContent = (slot.count > 1 && !locked) ? '×' + slot.count : '';
+    // у заблокированной ячейки иконку прячем — показываем только замок (::after)
+    slot.img.style.visibility = (slot.count > 0 && !locked) ? 'visible' : 'hidden';
   }
 
   // Показывает подсказку со «вспышкой», чтобы смена текста бросалась в глаза
@@ -240,7 +262,13 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
         if (!combo.active) continue;
         const line = document.createElement('div');
         line.className = 'ui-combo-line';
-        line.textContent = `+${combo.bonus} · ${t('combos.' + combo.id)}`;
+        const amount = document.createElement('span');
+        amount.className = 'ui-combo-amount';
+        amount.textContent = `+${combo.bonus}`;
+        const name = document.createElement('span');
+        name.className = 'ui-combo-name';
+        name.textContent = t('combos.' + combo.id);
+        line.append(amount, name);
         combosList.appendChild(line);
       }
     },
@@ -249,13 +277,18 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
     setQuests(quests) {
       questsBox.hidden = quests.length === 0;
       const doneCount = quests.filter((q) => q.done).length;
-      questsTitle.textContent = `${t('ui.quests_title')} ${doneCount}/${quests.length}`;
+      questsCount.textContent = `· ${doneCount} / ${quests.length}`;
       questsList.textContent = '';
       for (const quest of quests) {
         if (quest.done || !quest.active) continue;
         const line = document.createElement('div');
         line.className = 'ui-quest-line';
-        line.textContent = '• ' + quest.title;
+        const check = document.createElement('span');
+        check.className = 'ui-quest-check';
+        check.textContent = '☐';
+        const text = document.createElement('span');
+        text.textContent = quest.title;
+        line.append(check, text);
         questsList.appendChild(line);
       }
     },
