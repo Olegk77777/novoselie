@@ -3,16 +3,16 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=28';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=28';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=28';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=28';
-import { createPlacement } from './placement.js?v=28';
-import { createUI } from './ui.js?v=28';
-import { renderItemIcon } from './icon.js?v=28';
-import { createPower } from './power.js?v=28';
-import { evaluateCombos } from './combos.js?v=28';
-import { isQuestDone } from './quests.js?v=28';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=29';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=29';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=29';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=29';
+import { createPlacement } from './placement.js?v=29';
+import { createUI } from './ui.js?v=29';
+import { renderItemIcon } from './icon.js?v=29';
+import { createPower } from './power.js?v=29';
+import { evaluateCombos } from './combos.js?v=29';
+import { isQuestDone } from './quests.js?v=29';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -133,6 +133,7 @@ async function init() {
   // === Сводный уют: предметы + ремонт + бонусы + квесты ===
   let placementComfort = 0; // очки поставленных предметов (считает placement.js)
   let renoComfort = 0;      // очки за ремонт (паркет, обои)
+  let windowGlass = null;   // материал стекла окна (анимируется в кадровом цикле)
   let questComfort = 0;     // очки-награды за выполненные квесты
   let comboResults = [];    // текущие бонусы (combos.js)
 
@@ -208,7 +209,7 @@ async function init() {
   function applyReno(def) {
     // Окно: вставляем стекло, открываем паркет и обои
     if (def.applies === 'window') {
-      applyWindow(walls, GRID_COLS, GRID_ROWS);
+      windowGlass = applyWindow(walls, GRID_COLS, GRID_ROWS);
       renoDone.window = true;
       renoComfort += def.comfort || 0;
       ui.changeCount(def.id, -1);
@@ -343,8 +344,11 @@ async function init() {
   });
 
   // Главный цикл: перерисовываем сцену каждый кадр
+  const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
     placement.update(); // плавный доворот предмета «в руке»
+    // Окно «живёт»: сутки за окном идут по кругу (день → закат → ночь → рассвет)
+    if (windowGlass) windowGlass.uniforms.uTime.value = clock.getElapsedTime();
     renderer.render(scene, camera);
   });
 }
