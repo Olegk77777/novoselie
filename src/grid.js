@@ -14,7 +14,27 @@ export function createFloor(cols, rows) {
   const floor = new THREE.Mesh(geometry, material);
   // Плоскость по умолчанию стоит вертикально — кладём её горизонтально
   floor.rotation.x = -Math.PI / 2;
+  applyConcreteFloor(floor, cols, rows); // одеваем голый пол в бетон до ремонта
   return floor;
+}
+
+// Натягивает бетон на голый пол при старте (повтор, как у паркета). Нет файла —
+// остаётся серый цвет 0x8d8d86, игра не ждёт. Та же текстура, что на голых стенах.
+function applyConcreteFloor(floor, cols, rows) {
+  new THREE.TextureLoader().load(
+    'textures/concrete_bare.jpg',
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(cols / 2.5, rows / 2.5); // один «лист» бетона ~2.5×2.5 клетки
+      floor.material.map = texture;
+      floor.material.color.set(0xffffff); // белый, чтобы не тонировать текстуру
+      floor.material.needsUpdate = true;
+    },
+    undefined,
+    () => {} // нет текстуры — остаётся серый цвет (стартовый материал)
+  );
 }
 
 // Укладывает паркет на пол (вызывается при ремонте из game.js)

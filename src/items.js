@@ -70,6 +70,16 @@ function box(w, h, d, material, x, y, z) {
 }
 const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
 
+// Цилиндр — для круглых деталей (верньеры ТВ, динамики, антенны, ручки).
+// rx/rz — наклон в радианах (по умолчанию стоит вертикально вдоль Y).
+function cyl(radius, h, material, x, y, z, rx = 0, rz = 0) {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, h, 12), material);
+  mesh.position.set(x, y, z);
+  mesh.rotation.x = rx;
+  mesh.rotation.z = rz;
+  return mesh;
+}
+
 // === Табурет 1×1: сиденье + 4 ножки ===
 export function createStool() {
   const g = new THREE.Group();
@@ -205,11 +215,29 @@ export function createTVStand() {
   return g;
 }
 
-// === Телевизор 1×1 (низ на y=0 — может стоять на полу или на поверхности) ===
+// === Телевизор 1×1: ламповый ТВ — экран в рамке, верньеры, антенны-усы ===
+// (низ на y=0 — может стоять на полу или на тумбе)
 export function createTV() {
   const g = new THREE.Group();
-  g.add(box(0.6, 0.46, 0.44, plasticMaterial, 0, 0.23, 0));
-  g.add(box(0.48, 0.34, 0.03, lambert(COLORS.screen, { emissive: 0x101c30 }), 0, 0.24, 0.235));
+  const dark = lambert(0x2a2a30);
+  const knob = lambert(0xc8c2b2); // кремовые ручки-верньеры
+  // Ножки
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    g.add(box(0.06, 0.07, 0.06, dark, sx * 0.26, 0.035, sz * 0.17));
+  }
+  // Корпус (тёмный пластик)
+  g.add(box(0.62, 0.4, 0.46, plasticMaterial, 0, 0.27, 0));
+  // Экран в тёмной рамке (смещён влево, панель управления — справа)
+  g.add(box(0.42, 0.32, 0.02, lambert(0x141418), -0.07, 0.3, 0.235));
+  g.add(box(0.36, 0.26, 0.02, lambert(COLORS.screen, { emissive: 0x101c30 }), -0.07, 0.3, 0.245));
+  // Панель справа: два верньера (громкость/каналы) + решётка динамика
+  g.add(cyl(0.045, 0.03, knob, 0.2, 0.37, 0.235, Math.PI / 2));
+  g.add(cyl(0.045, 0.03, knob, 0.2, 0.27, 0.235, Math.PI / 2));
+  g.add(box(0.15, 0.12, 0.01, lambert(0x15151a), 0.2, 0.15, 0.235));
+  // Антенны-усы (металл, расходятся V назад-вверх)
+  g.add(box(0.1, 0.04, 0.1, dark, 0, 0.49, -0.08));
+  g.add(cyl(0.012, 0.55, metalMaterial, -0.16, 0.72, -0.14, -0.35, 0.5));
+  g.add(cyl(0.012, 0.55, metalMaterial, 0.16, 0.72, -0.14, -0.35, -0.5));
   return g;
 }
 
@@ -265,13 +293,34 @@ export function createFloorLamp() {
   return g;
 }
 
-// === Кассетный магнитофон 1×1 (низ на y=0 — пол или поверхность) ===
+// === Кассетный магнитофон 1×1: переносная магнитола ===
+// Динамики по бокам, кассетный отсек, клавиши, ручка для переноски, антенна.
+// (низ на y=0 — пол или тумба)
 export function createTapePlayer() {
   const g = new THREE.Group();
-  g.add(box(0.66, 0.22, 0.34, plasticMaterial, 0, 0.11, 0));
-  g.add(box(0.56, 0.14, 0.03, lambert(COLORS.panel), 0, 0.12, 0.18));
-  g.add(box(0.1, 0.1, 0.02, lambert(0x222228), -0.15, 0.12, 0.2));
-  g.add(box(0.1, 0.1, 0.02, lambert(0x222228), 0.15, 0.12, 0.2));
+  const grille = lambert(0x18181c);
+  const key = lambert(0xc2bca8); // кремовые клавиши
+  // Корпус
+  g.add(box(0.72, 0.36, 0.26, plasticMaterial, 0, 0.18, 0));
+  // Два динамика по бокам: ободок + решётка + колпачок
+  for (const sx of [-1, 1]) {
+    g.add(cyl(0.115, 0.012, lambert(0x3a3a40), sx * 0.22, 0.18, 0.128, Math.PI / 2));
+    g.add(cyl(0.1, 0.02, grille, sx * 0.22, 0.18, 0.136, Math.PI / 2));
+    g.add(cyl(0.028, 0.025, lambert(0x4a4a50), sx * 0.22, 0.18, 0.145, Math.PI / 2));
+  }
+  // Кассетный отсек (тёмное окошко) + две катушки
+  g.add(box(0.22, 0.13, 0.02, lambert(0x2a3038), 0, 0.23, 0.135));
+  g.add(cyl(0.03, 0.012, lambert(0x6a6a70), -0.05, 0.23, 0.146, Math.PI / 2));
+  g.add(cyl(0.03, 0.012, lambert(0x6a6a70), 0.05, 0.23, 0.146, Math.PI / 2));
+  // Ряд клавиш (play/stop/rewind…)
+  for (const x of [-0.1, -0.05, 0, 0.05, 0.1]) g.add(box(0.035, 0.05, 0.03, key, x, 0.08, 0.135));
+  // Ручка для переноски (П-образная, металл)
+  g.add(box(0.46, 0.025, 0.03, metalMaterial, 0, 0.44, 0));
+  g.add(box(0.025, 0.1, 0.03, metalMaterial, -0.22, 0.39, 0));
+  g.add(box(0.025, 0.1, 0.03, metalMaterial, 0.22, 0.39, 0));
+  // Регулятор громкости + телескопическая антенна
+  g.add(cyl(0.03, 0.025, key, -0.3, 0.375, 0.05));
+  g.add(cyl(0.01, 0.38, metalMaterial, 0.32, 0.52, -0.08, -0.15, -0.35));
   return g;
 }
 
