@@ -11,6 +11,49 @@ export function createPower(scene) {
   scene.add(cordsGroup);
   const cordMaterial = new THREE.LineBasicMaterial({ color: 0x16161a });
 
+  // Значок «нет питания» — парит над неподключённым прибором (жёлтый круг,
+  // молния, красное перечёркивание). Одна текстура на все индикаторы.
+  const indicatorsGroup = new THREE.Group();
+  scene.add(indicatorsGroup);
+  const indicatorTexture = makeNoPowerTexture();
+  const indicators = new Map(); // прибор → спрайт-значок
+
+  function makeNoPowerTexture() {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    const c = cv.getContext('2d');
+    c.beginPath();
+    c.arc(64, 64, 54, 0, Math.PI * 2);
+    c.fillStyle = '#e8c24a';
+    c.fill();
+    c.lineWidth = 7;
+    c.strokeStyle = '#2a2018';
+    c.stroke();
+    // Молния
+    c.fillStyle = '#2a2018';
+    c.beginPath();
+    c.moveTo(72, 26); c.lineTo(44, 70); c.lineTo(60, 70); c.lineTo(54, 102);
+    c.lineTo(88, 54); c.lineTo(70, 54); c.closePath();
+    c.fill();
+    // Красная перечёркивающая черта — «питания нет»
+    c.lineCap = 'round';
+    c.lineWidth = 13;
+    c.strokeStyle = '#c83828';
+    c.beginPath(); c.moveTo(30, 30); c.lineTo(98, 98); c.stroke();
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  function makeIndicator() {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: indicatorTexture, transparent: true, depthTest: false })
+    );
+    sprite.scale.set(0.5, 0.5, 0.5);
+    sprite.renderOrder = 999; // поверх мебели, не прячется за ней
+    return sprite;
+  }
+
   // Шнур: от прибора вниз, по полу до стены, вверх к розетке
   function makeCord(device, outlet) {
     const d = device.position;
@@ -51,6 +94,30 @@ export function createPower(scene) {
         load.set(best, load.get(best) + 1);
         connections.set(device, best);
         cordsGroup.add(makeCord(device, best));
+      }
+    }
+
+    // Значок «нет питания» над приборами, которым не хватило розетки
+    for (const device of devices) {
+      let sprite = indicators.get(device);
+      if (!connections.has(device)) {
+        if (!sprite) {
+          sprite = makeIndicator();
+          indicators.set(device, sprite);
+          indicatorsGroup.add(sprite);
+        }
+        const top = new THREE.Box3().setFromObject(device).max.y;
+        sprite.position.set(device.position.x, top + 0.35, device.position.z);
+        sprite.visible = true;
+      } else if (sprite) {
+        sprite.visible = false;
+      }
+    }
+    // Убрать значки приборов, которых больше нет на поле
+    for (const [device, sprite] of indicators) {
+      if (!devices.includes(device)) {
+        indicatorsGroup.remove(sprite);
+        indicators.delete(device);
       }
     }
     return connections;
