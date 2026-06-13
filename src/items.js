@@ -91,6 +91,66 @@ function makeApplianceLight(color, distance, pos) {
   return light;
 }
 
+// Мягкая круглая текстура для пылинки (радиальный градиент: яркий центр → прозрачные края).
+let moteTexture = null;
+function makeMoteTexture() {
+  if (moteTexture) return moteTexture;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 32;
+  const c = cv.getContext('2d');
+  const g = c.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = g;
+  c.fillRect(0, 0, 32, 32);
+  moteTexture = new THREE.CanvasTexture(cv);
+  return moteTexture;
+}
+
+// === Пылинки в воздухе: еле заметные почти прозрачные частички, мягко СВЕТЯЩИЕСЯ ===
+// Аддитивное свечение (как пыль в луче света) — создают «живой» воздух в комнате. Лёгкий
+// дрейф (покачивание). Дёшево: ~90 точек, без теней. game.js зовёт userData.tick(t).
+export function createDustMotes(cols, rows, height = 2.5) {
+  const COUNT = 90;
+  const halfW = cols / 2;
+  const halfD = rows / 2;
+  const base = new Float32Array(COUNT * 3);
+  const phases = new Float32Array(COUNT);
+  for (let i = 0; i < COUNT; i++) {
+    base[i * 3] = (Math.random() * 2 - 1) * halfW * 0.95;
+    base[i * 3 + 1] = 0.2 + Math.random() * (height - 0.3);
+    base[i * 3 + 2] = (Math.random() * 2 - 1) * halfD * 0.95;
+    phases[i] = Math.random() * Math.PI * 2;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(base.slice(), 3));
+  const mat = new THREE.PointsMaterial({
+    size: 6, // в ПИКСЕЛЯХ: при ортокамере sizeAttenuation:false — точки заданного размера
+    map: makeMoteTexture(),
+    color: 0xfff0d8, // тёплый-нейтральный
+    transparent: true,
+    opacity: 0.22, // еле заметные, почти прозрачные
+    depthWrite: false,
+    blending: THREE.AdditiveBlending, // мягко светятся
+    sizeAttenuation: false, // важно для ортографической камеры (иначе точки невидимы)
+  });
+  const points = new THREE.Points(geo, mat);
+  points.renderOrder = 6;
+  const pos = geo.attributes.position.array;
+  points.userData.tick = (t) => {
+    for (let i = 0; i < COUNT; i++) {
+      const ph = phases[i];
+      pos[i * 3] = base[i * 3] + Math.sin(t * 0.12 + ph) * 0.28; // дрейф по x
+      pos[i * 3 + 1] = base[i * 3 + 1] + Math.sin(t * 0.18 + ph * 1.7) * 0.16; // покачивание вверх-вниз
+      pos[i * 3 + 2] = base[i * 3 + 2] + Math.cos(t * 0.1 + ph * 0.8) * 0.28; // дрейф по z
+    }
+    geo.attributes.position.needsUpdate = true;
+    mat.opacity = 0.18 + 0.08 * Math.sin(t * 0.5); // еле заметное общее мерцание
+  };
+  return points;
+}
+
 // Цилиндр — для круглых деталей (верньеры ТВ, динамики, антенны, ручки).
 // rx/rz — наклон в радианах (по умолчанию стоит вертикально вдоль Y).
 function cyl(radius, h, material, x, y, z, rx = 0, rz = 0) {

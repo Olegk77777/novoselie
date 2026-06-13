@@ -58,7 +58,7 @@ export function createLighting(scene, opts = {}) {
   win.shadow.camera.far = 32;
   win.shadow.bias = -0.0005;
   win.shadow.normalBias = 0.02;
-  win.shadow.radius = 4; // мягче край тени
+  win.shadow.radius = 8; // мягкий, размытый край тени
   scene.add(win);
 
   // WINDOW SPILL — ВИДИМЫЙ поток света из окна в комнату: широкий мягкий конус на пол перед
@@ -87,8 +87,8 @@ export function createLighting(scene, opts = {}) {
   const C_NIGHT = new THREE.Color(0x0c1430); // почти тьма, глубокий синий
   const C_RAIN = new THREE.Color(0x586781); // свинцовый дождь
   const C_MOON = new THREE.Color(0xbcd0f4); // серебро полнолуния
-  const HEMI_NIGHT = new THREE.Color(0x3c465c); // ночной полумрак — синеватый, но поднятый (не чёрный)
-  const HEMI_DAY = new THREE.Color(0x586a88);
+  const HEMI_NIGHT = new THREE.Color(0x515d7e); // ночной полумрак — синеватый, но комната ХОРОШО видна
+  const HEMI_DAY = new THREE.Color(0x5e7090);
   const scratch = new THREE.Color();
   const scratch2 = new THREE.Color();
 
@@ -127,13 +127,15 @@ export function createLighting(scene, opts = {}) {
     w[nxt] += blend;
     const mood = 0.94 * w[0] + 0.8 * w[1] + 0.97 * w[2] + 0.92 * w[3]; // зима тусклее
 
-    // (2) сутки: 1 сутки = 360 c; зимой короче/темнее (bias)
+    // (2) сутки: 1 сутки = 360 c; зимой короче/темнее (bias). sunDay = sun + 0.4 —
+    //     день длиннее ночи (SYNC с walls.js: тот же сдвиг).
     const phase = fract(t / 360);
     const sun = Math.cos(phase * TAU); // +1 — полдень, -1 — полночь
+    const sunDay = sun + 0.4;
     const bias = 0.16 * w[1] - 0.1 * w[2] - 0.06 * w[3];
-    const dayF = smoothstep(-0.08 + bias, 0.45 + bias, sun);
+    const dayF = smoothstep(-0.08 + bias, 0.45 + bias, sunDay);
     const nightF = 1 - dayF;
-    const duskMix = smoothstep(0.55, 0, Math.abs(sun)); // максимум на закате/рассвете
+    const duskMix = smoothstep(0.55, 0, Math.abs(sunDay)); // максимум на закате/рассвете
 
     // (3) погода: окно дождя/тумана по кругу (110 c)
     const wc = fract(t / 110);
@@ -161,8 +163,10 @@ export function createLighting(scene, opts = {}) {
     // --- ВИДИМЫЙ поток из окна на пол — основная «масса» света от окна (decay 1, широкий) ---
     winSpill.intensity = (16.0 * dayF * clarity + duskMix * 8.0 * clarity + moonWash * 4.5) * mood;
 
-    // --- HEMI — мягкое рассеянное заполнение, покрывает всю комнату; дышит сутками ---
-    hemi.intensity = 0.5 + 0.4 * dayF + 0.12 * moonWash;
+    // --- HEMI — мягкое рассеянное заполнение, покрывает всю комнату; дышит сутками.
+    //     Ночная база высокая (0.95 — синие сумерки), чтобы комната была ВИДНА даже без
+    //     зажжённых ламп (день/ночь различаются окном, а не этим заполнением) ---
+    hemi.intensity = 0.95 + 0.25 * dayF + 0.12 * moonWash;
     scratch2.copy(HEMI_NIGHT).lerp(HEMI_DAY, dayF);
     hemi.color.copy(scratch2);
   }

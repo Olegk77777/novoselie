@@ -3,18 +3,18 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=53';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=53';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=53';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=53';
-import { createPlacement } from './placement.js?v=53';
-import { createUI } from './ui.js?v=53';
-import { renderItemIcon } from './icon.js?v=53';
-import { createPower } from './power.js?v=53';
-import { evaluateCombos } from './combos.js?v=53';
-import { isQuestDone } from './quests.js?v=53';
-import { createCat } from './cat.js?v=53';
-import { createLighting } from './lighting.js?v=53';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=54';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=54';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=54';
+import { MODEL_BUILDERS, createDebrisField, createDustMotes } from './items.js?v=54';
+import { createPlacement } from './placement.js?v=54';
+import { createUI } from './ui.js?v=54';
+import { renderItemIcon } from './icon.js?v=54';
+import { createPower } from './power.js?v=54';
+import { evaluateCombos } from './combos.js?v=54';
+import { isQuestDone } from './quests.js?v=54';
+import { createCat } from './cat.js?v=54';
+import { createLighting } from './lighting.js?v=54';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -76,6 +76,10 @@ async function init() {
   const walls = createWalls(GRID_COLS, GRID_ROWS);
   walls.traverse((o) => { if (o.isMesh) o.receiveShadow = true; }); // тени на дальние стены
   scene.add(walls);
+
+  // Пылинки в воздухе — еле заметные светящиеся частички (живой воздух). Анимируются
+  // через userData.tick в кадровом цикле (как аквариум/окно).
+  scene.add(createDustMotes(GRID_COLS, GRID_ROWS, WALL_HEIGHT));
 
   // Кот-житель: бонус за квест «табурет у окна». Создаётся скрытым, оживает после
   // выполнения квеста — забегает из дверного проёма, прыгает на свой табурет, сидит,

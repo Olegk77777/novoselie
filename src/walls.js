@@ -747,13 +747,16 @@ void main() {
   SeasonPalette pal = seasonPalette(sw);
   float snowF = sw.y;
 
-  // (2) сутки, сдвинутые по сезону (зимой темнее/короче)
+  // (2) сутки, сдвинутые по сезону (зимой темнее/короче).
+  // sunDay = sun + DAY_BIAS — смещаем «солнце» вверх, чтобы ДЕНЬ был длиннее НОЧИ
+  // (день ~48%, ночь ~34%). Позиции солнца/луны считаются по phase и не меняются.
   float phase = fract(t / 360.0);
   float sun = cos(phase * TAU);
+  float sunDay = sun + 0.4;
   float bias = seasonDayBias(sw);
-  float dayF = smoothstep(-0.08 + bias, 0.45 + bias, sun);
+  float dayF = smoothstep(-0.08 + bias, 0.45 + bias, sunDay);
   float nightF = 1.0 - dayF;
-  float duskMix = smoothstep(0.55, 0.0, abs(sun));
+  float duskMix = smoothstep(0.55, 0.0, abs(sunDay));
 
   // (3) погодный цикл — тайминг прежний, смысл переосмыслен по сезону
   float wc = fract(t / 110.0);
