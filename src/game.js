@@ -3,16 +3,16 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=33';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=33';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=33';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=33';
-import { createPlacement } from './placement.js?v=33';
-import { createUI } from './ui.js?v=33';
-import { renderItemIcon } from './icon.js?v=33';
-import { createPower } from './power.js?v=33';
-import { evaluateCombos } from './combos.js?v=33';
-import { isQuestDone } from './quests.js?v=33';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=34';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=34';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=34';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=34';
+import { createPlacement } from './placement.js?v=34';
+import { createUI } from './ui.js?v=34';
+import { renderItemIcon } from './icon.js?v=34';
+import { createPower } from './power.js?v=34';
+import { evaluateCombos } from './combos.js?v=34';
+import { isQuestDone } from './quests.js?v=34';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -394,6 +394,8 @@ async function init() {
   refreshQuestsUI();
   announceNewQuests(questCtx(lastLayout, lastConnections)); // запомнить стартовые (без модалов)
   refreshComfort();
+  // Приветствие — первый модал при входе (думерское, с первыми делами)
+  ui.showModal(t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'));
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
   window.addEventListener('keydown', (e) => {

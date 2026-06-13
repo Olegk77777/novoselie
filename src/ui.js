@@ -36,10 +36,11 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
       modalOverlay.hidden = true;
       return;
     }
-    const { text, kicker } = modalQueue[0];
+    const { text, kicker, okLabel } = modalQueue[0];
     modalKicker.textContent = kicker || '';
     modalKicker.style.display = kicker ? '' : 'none';
     modalText.textContent = text;
+    modalOk.textContent = okLabel || t('ui.ok');
     modalOverlay.hidden = false;
     modalCard.classList.remove('pop');
     void modalCard.offsetWidth; // перезапуск анимации появления
@@ -228,8 +229,8 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
     showHint,
     // Крупное модальное уведомление с кнопкой ОК (для важных событий — квесты).
     // kicker — короткая надпись-ярлык сверху («Новое задание» / «Выполнено»).
-    showModal(text, kicker) {
-      modalQueue.push({ text, kicker });
+    showModal(text, kicker, okLabel) {
+      modalQueue.push({ text, kicker, okLabel });
       if (modalQueue.length === 1) showNextModal();
     },
     // Обновляет список активных бонусов (results — из combos.js)

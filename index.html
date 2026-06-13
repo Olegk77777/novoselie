@@ -329,8 +329,9 @@
     .ui-modal-text {
       color: #f0e6d2;
       font-size: 25px;
-      line-height: 1.4;
+      line-height: 1.5;
       margin-bottom: 24px;
+      white-space: pre-line; /* переносы \n в тексте (приветствие — строфами) */
     }
     .ui-modal-ok {
       padding: 12px 50px;
@@ -382,6 +383,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=33"></script>
+  <script type="module" src="src/game.js?v=34"></script>
 </body>
 </html>
