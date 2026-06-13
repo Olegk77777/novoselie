@@ -3,18 +3,18 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=51';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=51';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=51';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=51';
-import { createPlacement } from './placement.js?v=51';
-import { createUI } from './ui.js?v=51';
-import { renderItemIcon } from './icon.js?v=51';
-import { createPower } from './power.js?v=51';
-import { evaluateCombos } from './combos.js?v=51';
-import { isQuestDone } from './quests.js?v=51';
-import { createCat } from './cat.js?v=51';
-import { createLighting } from './lighting.js?v=51';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=52';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=52';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=52';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=52';
+import { createPlacement } from './placement.js?v=52';
+import { createUI } from './ui.js?v=52';
+import { renderItemIcon } from './icon.js?v=52';
+import { createPower } from './power.js?v=52';
+import { evaluateCombos } from './combos.js?v=52';
+import { isQuestDone } from './quests.js?v=52';
+import { createCat } from './cat.js?v=52';
+import { createLighting } from './lighting.js?v=52';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -64,9 +64,9 @@ async function init() {
   const { camera, resize: resizeCamera, zoomBy, setReservedLeft, updateCameraAnim } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
 
   // Свет: эстетика Хоппера / Limbo-в-цвете. Главное заполнение — ОТ ОКНА (холодное),
-  // полумрак синеватый, тепло — только от приборов (контраст). Вся логика в src/lighting.js;
-  // оконный свет реагирует на шейдер окна (день/закат/ночь/сезон/полнолуние/дождь).
-  const lighting = createLighting(scene);
+  // полумрак синеватый, тепло — от приборов и тёплого света из дверного проёма (контраст).
+  // Вся логика в src/lighting.js; оконный свет реагирует на шейдер окна (сутки/сезон/погода).
+  const lighting = createLighting(scene, { doorX: -GRID_COLS / 2, doorZ: DOOR_CENTER_Z });
 
   // Пол, сетка, стены. На старте — голый бетон: паркет и обои кладутся при ремонте.
   const floor = createFloor(GRID_COLS, GRID_ROWS);

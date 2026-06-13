@@ -29,7 +29,10 @@ function smoothstep(a, b, x) {
 const fract = (x) => x - Math.floor(x);
 const hash1 = (n) => fract(Math.sin(n * 91.37) * 43758.5453);
 
-export function createLighting(scene) {
+export function createLighting(scene, opts = {}) {
+  // Якорь дверного проёма (левая стена): из game.js передаём мировые координаты.
+  const doorX = opts.doorX ?? -5; // x левой стены
+  const doorZ = opts.doorZ ?? 2; // центр проёма по Z
   // HEMI — мягкое РАССЕЯННОЕ заполнение «от окна», покрывает всю комнату (как нейтральный
   // киношный fill «за кадром»: вроде источника нет, а тени не проваливаются). Низ заметно
   // поднят (0x242a36), чтобы свет доставал и до обращённых вниз граней — комната ровно залита.
@@ -65,6 +68,16 @@ export function createLighting(scene) {
   fill.target.position.set(0, 0.7, -1);
   scene.add(fill.target);
   scene.add(fill);
+
+  // DOOR — мягкий ТЁПЛЫЙ свет из дверного проёма (лампочка в коридоре квартиры). Второй
+  // тёплый якорь — контраст холодному окну, как у Хоппера «свет из соседней комнаты».
+  // Конус-прожектор из коридора (из-за левой стены) в комнату; без тени (один кастер — окно).
+  const door = new THREE.SpotLight(0xf6c98c, 18.0, 7.5, 0.7, 0.6, 2.0);
+  door.position.set(doorX - 0.4, 1.7, doorZ); // чуть за стеной, на высоте дверного проёма
+  door.target.position.set(doorX + 2.6, 0.2, doorZ + 0.4); // вперёд-вниз в комнату → лужица у входа
+  scene.add(door.target);
+  door.castShadow = false;
+  scene.add(door);
 
   // Опорные цвета оконного света (между ними интерполируем по времени/погоде/луне).
   const C_DAY = new THREE.Color(0xaecbf2); // холодный дневной
@@ -148,5 +161,5 @@ export function createLighting(scene) {
     hemi.color.copy(scratch2);
   }
 
-  return { hemi, win, fill, update, lowEnd: LOW_END };
+  return { hemi, win, fill, door, update, lowEnd: LOW_END };
 }
