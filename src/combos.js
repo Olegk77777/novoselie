@@ -7,35 +7,39 @@
 export function evaluateCombos(comboDefs, placedItems, connections) {
   const itemsById = (id) => placedItems.filter((i) => i.userData.def.id === id);
 
-  return comboDefs.map((combo) => {
-    let active = false;
-
-    if (combo.type === 'placed') {
+  // Проверка одного условия (combo или подусловие внутри 'all')
+  function evalOne(c) {
+    if (c.type === 'all') {
+      // Все подусловия истинны (напр. «кресло у ТВ И ТВ подключён»)
+      return c.conditions.every(evalOne);
+    }
+    if (c.type === 'placed') {
       // Предмет просто стоит/висит
-      active = itemsById(combo.item).length > 0;
-    } else if (combo.type === 'connected') {
+      return itemsById(c.item).length > 0;
+    }
+    if (c.type === 'connected') {
       // Прибор подключён к розетке
-      active = [...connections.keys()].some((d) => d.userData.def.id === combo.item);
-    } else if (combo.type === 'near') {
+      return [...connections.keys()].some((d) => d.userData.def.id === c.item);
+    }
+    if (c.type === 'near') {
       // Предмет a в радиусе maxDist клеток от предмета b (по центрам)
-      const as = itemsById(combo.a);
-      const bs = itemsById(combo.b);
-      active = as.some((a) =>
-        bs.some(
-          (b) =>
-            Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z) <= combo.maxDist
-        )
+      const as = itemsById(c.a);
+      const bs = itemsById(c.b);
+      return as.some((a) =>
+        bs.some((b) => Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z) <= c.maxDist)
       );
-    } else if (combo.type === 'onRug') {
+    }
+    if (c.type === 'onRug') {
       // Предмет стоит на ковре: пересечение занятых подклеток
-      const rugs = itemsById(combo.rug);
-      active = itemsById(combo.item).some((item) => {
+      const rugs = itemsById(c.rug);
+      return itemsById(c.item).some((item) => {
         if (!item.userData.keys) return false;
         const keys = new Set(item.userData.keys);
         return rugs.some((rug) => (rug.userData.keys || []).some((k) => keys.has(k)));
       });
     }
+    return false;
+  }
 
-    return { id: combo.id, bonus: combo.bonus, active };
-  });
+  return comboDefs.map((combo) => ({ id: combo.id, bonus: combo.bonus, active: evalOne(combo) }));
 }

@@ -1,11 +1,11 @@
 {
-  "_comment": "Бонусы за сочетания. Имена — в locales/<lang>.json по ключу combos.<id>. Типы условий: placed — предмет стоит (item); connected — прибор подключён к розетке (item); near — предмет a в радиусе maxDist клеток от предмета b; onRug — предмет item стоит на ковре rug (пересечение клеток). Новый бонус = новая запись, без правки логики.",
+  "_comment": "Бонусы за сочетания. Имена — в locales/<lang>.json по ключу combos.<id>. Типы условий: all — все подусловия conditions истинны (И, напр. «кресло у ТВ И ТВ подключён»); placed — предмет стоит (item); connected — прибор подключён к розетке (item); near — предмет a в радиусе maxDist клеток от предмета b; onRug — предмет item стоит на ковре rug (пересечение клеток). Новый бонус = новая запись, без правки логики.",
   "combos": [
     { "id": "tv_works", "type": "connected", "item": "tv", "bonus": 4 },
     { "id": "music", "type": "connected", "item": "tape_player", "bonus": 3 },
     { "id": "warm_light", "type": "connected", "item": "floor_lamp", "bonus": 4 },
     { "id": "aquarium_works", "type": "connected", "item": "aquarium", "bonus": 4 },
-    { "id": "tv_evenings", "type": "near", "a": "armchair", "b": "tv", "maxDist": 3, "bonus": 5 },
+    { "id": "tv_evenings", "type": "all", "conditions": [{ "type": "near", "a": "armchair", "b": "tv", "maxDist": 3 }, { "type": "connected", "item": "tv" }], "bonus": 5 },
     { "id": "babushka", "type": "placed", "item": "wall_rug", "bonus": 6 },
     { "id": "cozy_corner", "type": "onRug", "item": "armchair", "rug": "floor_rug", "bonus": 4 }
   ]

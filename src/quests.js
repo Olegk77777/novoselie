@@ -17,6 +17,10 @@ export function isQuestDone(quest, ctx) {
   const itemsById = (id) => ctx.placedItems.filter((i) => i.userData.def.id === id);
 
   switch (quest.type) {
+    case 'all':
+      // Все подусловия истинны (напр. «рядом с ТВ И подключён к сети»)
+      return quest.conditions.every((c) => isQuestDone(c, ctx));
+
     case 'placed':
       return itemsById(quest.item).length > 0;
 
