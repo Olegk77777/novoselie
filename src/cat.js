@@ -124,23 +124,30 @@ function applyPose(parts, kind, t) {
 }
 
 // Контроллер кота. doorPoint — точка появления у дверного проёма (мир, на полу).
-export function createCat({ scene, doorPoint }) {
+// cols/rows/sub — сетка комнаты (sub = подклеток в клетке, как SUB в placement.js):
+// по ней кот ищет путь A* и ОБХОДИТ мебель (занятость приходит в ctx.isBlocked).
+export function createCat({ scene, doorPoint, cols, rows, sub }) {
   const root = buildCatModel();
   root.visible = false;
   scene.add(root);
   const parts = root.userData.parts;
 
   const DOOR = new THREE.Vector3(doorPoint.x, 0, doorPoint.z);
-  const from = new THREE.Vector3();
+  const from = new THREE.Vector3();   // для дуги прыжка
   const to = new THREE.Vector3();
+  const subCols = cols * sub, subRows = rows * sub;
+  const SPEED = 2.3;                   // скорость бега, юнитов/сек
 
   let state = 'hidden';
   let stateStart = 0;   // время начала текущего состояния
-  let moveDur = 1;
+  let moveDur = 1;      // длительность прыжка
   let nextAt = null;    // когда коту в следующий раз появиться
   let yawFrom = 0, yawTo = 0; // для доворота в прыжке
   let spotBlocked = false;    // кот пришёл, а место занято
-  let now = 0;
+  let now = 0, lastTime = 0;
+  let leaveStartY = 0;        // высота, с которой кот спрыгивает (со стула)
+  let path = [], pathI = 0, goalKey = ''; // текущий маршрут (мировые точки) и индекс
+  let isBlocked = () => false;            // занятость клетки мебелью (из ctx)
 
   // Сидя кот развёрнут на 3/4 к зрителю (видно мордочку и глаза), а не спиной в окно.
   const SIT_FACE = Math.PI * 0.18;
@@ -160,15 +167,134 @@ export function createCat({ scene, doorPoint }) {
   };
   function enter(s) { state = s; stateStart = now; }
 
-  function startMove(a, b, dur, faceWindow) {
-    from.copy(a); to.copy(b); moveDur = dur; stateStart = now;
-    yawFrom = root.rotation.y;
-    yawTo = faceWindow ? Math.PI : yawOf(a.x, a.z, b.x, b.z);
-    if (!faceWindow) root.rotation.y = yawTo; // в беге смотрим по ходу сразу
+  // === Сетка и поиск пути (A*) ===
+  const inBounds = (c, s) => c >= 0 && c < subCols && s >= 0 && s < subRows;
+  const worldToSub = (x, z) => ({
+    sc: THREE.MathUtils.clamp(Math.floor((x + cols / 2) * sub), 0, subCols - 1),
+    sr: THREE.MathUtils.clamp(Math.floor((z + rows / 2) * sub), 0, subRows - 1),
+  });
+  const subToWorld = (sc, sr) => new THREE.Vector3(-cols / 2 + (sc + 0.5) / sub, 0, -rows / 2 + (sr + 0.5) / sub);
+
+  // Ближайшая свободная клетка к (sc,sr) — на случай, если цель попала в занятую
+  function nearestFree(sc, sr) {
+    if (!isBlocked(sc, sr)) return { sc, sr };
+    for (let r = 1; r <= 6; r++) {
+      for (let dc = -r; dc <= r; dc++) for (let dr = -r; dr <= r; dr++) {
+        if (Math.max(Math.abs(dc), Math.abs(dr)) !== r) continue;
+        const c = sc + dc, s = sr + dr;
+        if (inBounds(c, s) && !isBlocked(c, s)) return { sc: c, sr: s };
+      }
+    }
+    return { sc, sr };
   }
+
+  // A* по подсетке, 8 направлений. Стартовая клетка всегда проходима (кот мог
+  // стоять на «занятой» клетке своего табурета). Возвращает массив {sc,sr} или null.
+  function findPath(start, goal) {
+    const idx = (c, s) => c * subRows + s;
+    const h = (c, s) => { const dc = Math.abs(c - goal.sc), ds = Math.abs(s - goal.sr); return (dc + ds) + (Math.SQRT2 - 2) * Math.min(dc, ds); };
+    const g = new Map(), came = new Map(), closed = new Set();
+    const open = [{ c: start.sc, s: start.sr, f: h(start.sc, start.sr) }];
+    g.set(idx(start.sc, start.sr), 0);
+    const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    let guard = 0;
+    while (open.length && guard++ < 4000) {
+      let bi = 0; for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
+      const cur = open.splice(bi, 1)[0];
+      const cId = idx(cur.c, cur.s);
+      if (cur.c === goal.sc && cur.s === goal.sr) {
+        const out = [{ sc: cur.c, sr: cur.s }]; let k = cId;
+        while (came.has(k)) { const p = came.get(k); out.push({ sc: p.c, sr: p.s }); k = idx(p.c, p.s); }
+        return out.reverse();
+      }
+      if (closed.has(cId)) continue; closed.add(cId);
+      for (const [dc, ds] of N8) {
+        const nc = cur.c + dc, ns = cur.s + ds;
+        if (!inBounds(nc, ns)) continue;
+        const isStart = nc === start.sc && ns === start.sr;
+        if (isBlocked(nc, ns) && !isStart) continue;
+        if (dc !== 0 && ds !== 0 && isBlocked(cur.c + dc, cur.s) && isBlocked(cur.c, cur.s + ds)) continue; // не срезать угол
+        const nId = idx(nc, ns); if (closed.has(nId)) continue;
+        const ng = (g.get(cId) ?? Infinity) + (dc !== 0 && ds !== 0 ? Math.SQRT2 : 1);
+        if (ng < (g.get(nId) ?? Infinity)) {
+          came.set(nId, { c: cur.c, s: cur.s }); g.set(nId, ng);
+          open.push({ c: nc, s: ns, f: ng + h(nc, ns) });
+        }
+      }
+    }
+    return null;
+  }
+
+  // Прямая видимость между клетками (для сглаживания зигзагов сетки)
+  function lineClear(a, b) {
+    const steps = Math.ceil(Math.hypot(a.sc - b.sc, a.sr - b.sr)) * 2;
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      if (isBlocked(Math.round(a.sc + (b.sc - a.sc) * t), Math.round(a.sr + (b.sr - a.sr) * t))) return false;
+    }
+    return true;
+  }
+  // String-pulling: выкидываем промежуточные точки, если до следующей видно по прямой
+  function smooth(cells) {
+    if (cells.length <= 2) return cells;
+    const out = [cells[0]]; let anchor = 0;
+    for (let i = 2; i < cells.length; i++) {
+      if (!lineClear(cells[anchor], cells[i])) { out.push(cells[i - 1]); anchor = i - 1; }
+    }
+    out.push(cells[cells.length - 1]);
+    return out;
+  }
+
+  // Построить маршрут к мировой точке goalWorld (огибая мебель). Если пути нет —
+  // прямая линия (чтобы кот всё равно дошёл, не застрял).
+  function buildPath(goalWorld) {
+    const s = worldToSub(root.position.x, root.position.z);
+    const gRaw = worldToSub(goalWorld.x, goalWorld.z);
+    const gg = nearestFree(gRaw.sc, gRaw.sr);
+    const cells = findPath(s, gg);
+    if (!cells) {
+      path = [new THREE.Vector3(root.position.x, 0, root.position.z), new THREE.Vector3(goalWorld.x, 0, goalWorld.z)];
+    } else {
+      path = smooth(cells).map((c) => subToWorld(c.sc, c.sr));
+      path[0] = new THREE.Vector3(root.position.x, 0, root.position.z);
+      path[path.length - 1] = new THREE.Vector3(goalWorld.x, 0, goalWorld.z);
+    }
+    pathI = 1;
+  }
+  const goalKeyOf = (w) => { const g = worldToSub(w.x, w.z); return `${g.sc},${g.sr}`; };
+
+  // Двигаться вдоль path со скоростью SPEED. Возвращает true, когда дошёл до конца.
+  function followPath(dt) {
+    let budget = SPEED * dt;
+    while (budget > 0 && pathI < path.length) {
+      const tgt = path[pathI];
+      const dx = tgt.x - root.position.x, dz = tgt.z - root.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist <= budget + 1e-5) {
+        root.position.x = tgt.x; root.position.z = tgt.z; budget -= dist; pathI++;
+        if (dist > 1e-4) root.rotation.y = Math.atan2(dx, dz);
+      } else {
+        root.position.x += (dx / dist) * budget; root.position.z += (dz / dist) * budget;
+        root.rotation.y = Math.atan2(dx, dz); budget = 0;
+      }
+    }
+    return pathI >= path.length;
+  }
+
+  function startJump(stool) {
+    from.copy(root.position);
+    to.set(stool.position.x, sitY(stool), stool.position.z);
+    moveDur = 0.55; stateStart = now;
+    yawFrom = root.rotation.y; yawTo = SIT_FACE;
+    enter('jumping');
+  }
+  function goLeave() { leaveStartY = root.position.y; buildPath(DOOR); enter('leaving'); }
 
   function update(time, ctx) {
     now = time;
+    const dt = Math.min(Math.max(time - lastTime, 0), 0.05); // защита от скачков (вкладка спала)
+    lastTime = time;
+    isBlocked = ctx.isBlocked || (() => false);
     const stool = ctx.stool;
     const occupied = !!ctx.occupied;
     // Освободили место — задание снимается (даже если кот ещё стоит и смотрит)
@@ -182,7 +308,8 @@ export function createCat({ scene, doorPoint }) {
           if (time >= nextAt) {
             root.position.copy(DOOR);
             root.visible = true;
-            startMove(DOOR, approachOf(stool), 2.2, false);
+            const ap = approachOf(stool);
+            buildPath(ap); goalKey = goalKeyOf(ap);
             enter('entering');
           }
         } else {
@@ -191,20 +318,15 @@ export function createCat({ scene, doorPoint }) {
         break;
 
       case 'entering': {
-        if (!stool) { leaveTo(1.6); break; }
-        root.position.lerpVectors(from, approachOf(stool), ease(prog()));
+        if (!stool) { goLeave(); break; }
+        const ap = approachOf(stool);
+        const gk = goalKeyOf(ap);
+        if (gk !== goalKey) { buildPath(ap); goalKey = gk; } // табурет передвинули — перестроить путь
+        const done = followPath(dt);
         applyPose(parts, 'run', time);
-        if (prog() >= 1) {
-          if (occupied) {                 // место занято — садится и смотрит снизу
-            spotBlocked = true;
-            enter('look');
-          } else {                        // прыжок на табурет
-            from.copy(root.position);
-            to.set(stool.position.x, sitY(stool), stool.position.z);
-            moveDur = 0.55; stateStart = now;
-            yawFrom = root.rotation.y; yawTo = SIT_FACE;
-            enter('jumping');
-          }
+        if (done) {
+          if (occupied) { spotBlocked = true; enter('look'); } // место занято — смотрит снизу
+          else startJump(stool);                                // прыжок на табурет
         }
         break;
       }
@@ -220,45 +342,35 @@ export function createCat({ scene, doorPoint }) {
       }
 
       case 'sitting':
-        if (!stool) { leaveFromStool(); break; }
+        if (!stool) { goLeave(); break; }
         root.position.set(stool.position.x, sitY(stool), stool.position.z);
         root.rotation.y = SIT_FACE;       // сидит, развёрнут на 3/4 к зрителю
         applyPose(parts, 'sit', time);
-        if (occupied) { leaveFromStool(); break; } // на стул что-то поставили — уходит
-        if (now - stateStart > 8) leaveFromStool();
+        if (occupied) { goLeave(); break; } // на стул что-то поставили — уходит
+        if (now - stateStart > 8) goLeave();
         break;
 
       case 'look': {                       // сидит перед занятым табуретом, смотрит вверх
-        if (!stool) { leaveTo(1.6); break; }
+        if (!stool) { goLeave(); break; }
         const ap = approachOf(stool);
         root.position.set(ap.x, 0, ap.z);
         root.rotation.y = yawOf(ap.x, ap.z, stool.position.x, stool.position.z);
         applyPose(parts, 'look', time);
-        if (!occupied) {                   // освободили при коте — сразу прыгает
-          from.copy(root.position);
-          to.set(stool.position.x, sitY(stool), stool.position.z);
-          moveDur = 0.55; stateStart = now; yawFrom = root.rotation.y; yawTo = SIT_FACE;
-          enter('jumping');
-          break;
-        }
-        if (now - stateStart > 4.5) leaveTo(1.6);
+        if (!occupied) { startJump(stool); break; } // освободили при коте — сразу прыгает
+        if (now - stateStart > 4.5) goLeave();
         break;
       }
 
       case 'leaving': {
-        const p = ease(prog());
-        root.position.lerpVectors(from, to, p);
-        root.position.y = from.y * (1 - p);  // если прыгал со стула — плавно вниз
+        const done = followPath(dt);
+        const ky = THREE.MathUtils.clamp((now - stateStart) / 0.35, 0, 1);
+        root.position.y = leaveStartY * (1 - ky); // спрыгивание со стула к полу
         applyPose(parts, 'run', time);
-        if (prog() >= 1) { root.visible = false; enter('hidden'); nextAt = time + 15 + Math.random() * 15; }
+        if (done) { root.visible = false; enter('hidden'); nextAt = time + 15 + Math.random() * 15; }
         break;
       }
     }
   }
-
-  // Уход со стула (сначала к точке перед ним, потом к двери — но упрощаем: сразу к двери)
-  function leaveFromStool() { startMove(root.position.clone(), DOOR, 2.2, false); enter('leaving'); }
-  function leaveTo(dur) { startMove(root.position.clone(), DOOR, dur, false); enter('leaving'); }
 
   return {
     group: root,

@@ -3,17 +3,17 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=38';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=38';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=38';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=38';
-import { createPlacement } from './placement.js?v=38';
-import { createUI } from './ui.js?v=38';
-import { renderItemIcon } from './icon.js?v=38';
-import { createPower } from './power.js?v=38';
-import { evaluateCombos } from './combos.js?v=38';
-import { isQuestDone } from './quests.js?v=38';
-import { createCat } from './cat.js?v=38';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=39';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=39';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=39';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=39';
+import { createPlacement } from './placement.js?v=39';
+import { createUI } from './ui.js?v=39';
+import { renderItemIcon } from './icon.js?v=39';
+import { createPower } from './power.js?v=39';
+import { evaluateCombos } from './combos.js?v=39';
+import { isQuestDone } from './quests.js?v=39';
+import { createCat } from './cat.js?v=39';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -78,9 +78,11 @@ async function init() {
   // Кот-житель: бонус за квест «табурет у окна». Создаётся скрытым, оживает после
   // выполнения квеста — забегает из дверного проёма, прыгает на свой табурет, сидит,
   // убегает. Появление отсюда (центр дверного проёма по Z).
+  // sub: 2 — подклеток в клетке, совпадает с SUB в placement.js (общая сетка занятости)
   const cat = createCat({
     scene,
     doorPoint: { x: -GRID_COLS / 2 + 0.5, z: DOOR_CENTER_Z },
+    cols: GRID_COLS, rows: GRID_ROWS, sub: 2,
   });
 
   // Рендерер — рисует сцену в <canvas> на странице
@@ -256,11 +258,20 @@ async function init() {
   const power = createPower(scene);
   let lastConnections = new Map(); // прибор → розетка
   let lastLayout = [];
+  // Занятые мебелью подклетки — карта препятствий для кота (обходит мебель).
+  // Ковры (layer:"rug") НЕ препятствие — по ним кот ходит. Предметы на поверхностях
+  // (occupant) клеток пола не держат (нет keys), поэтому в карту не попадают.
+  let obstacleKeys = new Set();
 
   function recompute(placedItems) {
     lastLayout = placedItems;
     lastConnections = power.update(placedItems);
     comboResults = evaluateCombos(comboDefs, placedItems, lastConnections);
+    obstacleKeys = new Set();
+    for (const it of placedItems) {
+      if (it.userData.def.layer === 'rug') continue;
+      for (const k of it.userData.keys || []) obstacleKeys.add(k);
+    }
     checkQuests(placedItems, lastConnections);
     refreshComfort();
   }
@@ -464,6 +475,7 @@ async function init() {
       active: isCatActive(),
       stool: catStool,
       occupied: catStool ? !!catStool.userData.occupant : false,
+      isBlocked: (sc, sr) => obstacleKeys.has(`${sc},${sr}`), // кот обходит мебель
     });
     setCatSpotBlocked(cat.isSpotBlocked());
     renderer.render(scene, camera);
