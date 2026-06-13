@@ -154,8 +154,8 @@ function applyConcrete(wallsGroup) {
   );
 }
 
-// Вставляет окно: стекло (шейдер — вечернее небо, луна, косые блики) + белая
-// рама с переплётом. Вызывается при ремонте (до паркета). Добавляет всё в группу стен.
+// Вставляет окно: стекло (большой думерский шейдер за окном) + белая рама с
+// переплётом. Вызывается при ремонте (до паркета). Добавляет всё в группу стен.
 export function applyWindow(wallsGroup, cols, rows) {
   const backZ = -rows / 2 - THICKNESS / 2;
   const cx = (WINDOW.from + WINDOW.to) / 2;
@@ -164,8 +164,13 @@ export function applyWindow(wallsGroup, cols, rows) {
   const h = WINDOW.top - WINDOW.bottom;
 
   // Стекло — анимированный ShaderMaterial: думерский пейзаж за окном.
-  // Сутки идут по кругу (день → закат → ночь с огнями панелек → рассвет).
-  // uTime обновляется из game.js в кадровом цикле.
+  // Сутки идут по кругу (день → закат → ночь → рассвет, 1 сутки = 360 c).
+  // Город — три параллакс-слоя панелек с воздушной перспективой (дальние тонут
+  // в дымке), тёплые окна-точки ночью. Сезоны меняются каждые 3 суток
+  // (осень-листва → зима-вьюга → весна-оттепель → лето-пух, год = 4320 c).
+  // Иногда ночь — полнолуние: звёзд не видно, крупная луна с гало и серебряным
+  // светом. Сохранены дождь/туман/молнии/капли на стекле (теперь сезонные).
+  // Всё выведено из uTime (+ uAspect для круглых форм); game.js крутит uTime.
   const glass = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
     new THREE.ShaderMaterial({
@@ -176,192 +181,714 @@ export function applyWindow(wallsGroup, cols, rows) {
         void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
       `,
       fragmentShader: `
-        precision highp float;
-        uniform float uTime;
-        uniform float uAspect;   // ширина/высота окна — чтобы капли на стекле были круглыми
-        varying vec2 vUv;
-        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        float hash1(float n){ return fract(sin(n * 91.37) * 43758.5453); }
+precision highp float;
+uniform float uTime;
+uniform float uAspect;   // ширина/высота окна (~2.31) — чтобы круглое было круглым
+varying vec2 vUv;
 
-        // Думерский пейзаж за окном. Вынесен в функцию, чтобы капли на стекле
-        // могли его ПРЕЛОМЛЯТЬ (вызываем scene() со смещёнными uv — эффект линзы).
-        vec3 scene(vec2 uv, float phase, float dayF, float nightF, float duskMix, float clarity){
-          float TAU = 6.28318;
-          // Небо: ночь / день / закат
-          float g = smoothstep(0.0, 1.0, uv.y);
-          vec3 night = mix(vec3(0.09,0.09,0.18), vec3(0.02,0.02,0.07), g);
-          vec3 day   = mix(vec3(0.70,0.71,0.70), vec3(0.42,0.50,0.62), g);
-          vec3 dusk  = mix(vec3(0.96,0.50,0.28), vec3(0.20,0.13,0.33), smoothstep(0.0,0.85,uv.y));
-          vec3 col = mix(night, day, dayF);
-          col = mix(col, dusk, duskMix * 0.75);
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float hash1(float n){ return fract(sin(n * 91.37) * 43758.5453); }
 
-          // Звёзды (ночью, мерцают)
-          vec2 sg = floor(uv * vec2(70.0, 45.0));
-          float sh = hash(sg);
-          float star = smoothstep(0.975, 1.0, sh) * (0.6 + 0.4 * sin(uTime * 2.5 + sh * 40.0));
-          col += vec3(0.9, 0.92, 1.0) * star * nightF * clarity;  // в тучах звёзд не видно
+// «круглая» дистанция с учётом пропорций окна
+float aspDist(vec2 d, float asp){ d.x *= asp; return length(d); }
 
-          // Светило на дуге (солнце днём, луна ночью) + мягкое гало
-          float ang = phase * TAU;
-          vec2 lp = vec2(0.5 + 0.42 * sin(ang), 0.32 + 0.52 * cos(ang));
-          float dl = distance((uv - lp) * vec2(1.0, 0.9), vec2(0.0));
-          vec3 discCol = mix(vec3(0.86,0.89,0.97), vec3(1.0,0.92,0.74), dayF);
-          col += discCol * smoothstep(0.3, 0.0, dl) * 0.22 * clarity;        // гало гаснет в тучах
-          col = mix(col, discCol, smoothstep(0.05, 0.035, dl) * clarity);    // и сам диск солнца/луны
+// =====================================================================
+//  СЕЗОНЫ — всё выведено из uTime. Цикл осень->зима->весна->лето.
+//  1 сутки = 360 c, 1 сезон = 3 суток, год = 4320 c.
+// =====================================================================
+const float YEAR_LEN = 4320.0;
+const float XFADE    = 0.15;
 
-          // Город — силуэты панелек, ночью часть окон горит тёплым
-          vec3 cityCol = mix(vec3(0.04,0.04,0.07), vec3(0.11,0.11,0.14), dayF);
-          for (int i = 0; i < 7; i++){
-            float fi = float(i);
-            float bx = fi * 0.145 + 0.01;
-            float bw = 0.125;
-            float topY = 0.19 + hash(vec2(fi, 3.0)) * 0.20;
-            if (uv.x > bx && uv.x < bx + bw && uv.y < topY){
-              vec2 wcell = vec2((uv.x - bx) / bw, uv.y / topY) * vec2(4.0, 9.0);
-              vec2 wf = fract(wcell);
-              float win = step(0.22, wf.x) * step(wf.x, 0.78) * step(0.22, wf.y) * step(wf.y, 0.82);
-              float lit = step(0.52, hash(floor(wcell) + fi * 11.0));
-              col = mix(cityCol, vec3(1.0, 0.78, 0.40), win * lit * nightF * 0.92);
-            }
-          }
+// окно «floor(si)==k» через две step(), без int==
+float seasonIs(float si, float k){
+  return step(k, si) * step(si, k + 0.999);
+}
 
-          // Дымка у горизонта
-          float haze = smoothstep(0.45, 0.16, uv.y) * smoothstep(0.0, 0.16, uv.y);
-          col = mix(col, mix(vec3(0.5,0.5,0.55), vec3(0.16,0.15,0.22), nightF), haze * 0.35);
+// (wAutumn, wWinter, wSpring, wSummer), сумма == 1.0
+vec4 seasonWeights(float t){
+  float yf = fract(t / YEAR_LEN);
+  float si = yf * 4.0;
+  float cur = floor(si);
+  float fpart = si - cur;
+  float blend = smoothstep(1.0 - XFADE, 1.0, fpart);
+  float nxt = cur + 1.0;
+  nxt = nxt - 4.0 * step(3.5, nxt);   // 4 -> 0 по кругу
 
-          // Провода ЛЭП — две провисающие линии
-          col = mix(col, vec3(0.03,0.03,0.05), smoothstep(0.005, 0.0, abs(uv.y - (0.60 + 0.025*sin(uv.x*7.0+1.0)))) * 0.7);
-          col = mix(col, vec3(0.03,0.03,0.05), smoothstep(0.004, 0.0, abs(uv.y - (0.66 + 0.02*sin(uv.x*7.0)))) * 0.5);
-          return col;
-        }
+  vec4 w = vec4(0.0);
+  float cw = 1.0 - blend;
+  float nw = blend;
+  w.x += seasonIs(cur, 0.0) * cw + seasonIs(nxt, 0.0) * nw; // осень
+  w.y += seasonIs(cur, 1.0) * cw + seasonIs(nxt, 1.0) * nw; // зима
+  w.z += seasonIs(cur, 2.0) * cw + seasonIs(nxt, 2.0) * nw; // весна
+  w.w += seasonIs(cur, 3.0) * cw + seasonIs(nxt, 3.0) * nw; // лето
+  float s = w.x + w.y + w.z + w.w;
+  return w / max(s, 1e-4);
+}
 
-        // Косой дождь-струи за стеклом: 3 слоя для глубины (параллакс).
-        // Капля = тонкая вытянутая чёрточка, непрерывно падающая вниз.
-        float rainFall(vec2 uv, float t){
-          uv.x += uv.y * 0.16;                 // наклон от ветра
-          float acc = 0.0;
-          for (int k = 0; k < 3; k++){
-            float fk = float(k);
-            float n = 70.0 + fk * 46.0;        // плотность колонок (дальше — гуще и мельче)
-            float x = uv.x * n;
-            float coli = floor(x);
-            float fx = fract(x) - 0.5;
-            float seed = hash1(coli + fk * 57.0);
-            float speed = (0.55 + seed * 0.5) * (1.0 + fk * 0.45);
-            float seg = 0.10 + seed * 0.10;    // расстояние между каплями в колонке
-            float ph = fract((uv.y + t * speed) / seg);   // линия постоянной фазы падает вниз
-            float drop = smoothstep(0.5, 0.0, abs(fx))
-                       * smoothstep(0.0, 0.14, ph) * smoothstep(1.0, 0.35, ph);
-            drop *= step(0.30, seed);          // не все колонки заняты — реже, живее
-            acc += drop * (0.65 - fk * 0.13);
-          }
-          return clamp(acc, 0.0, 1.0);
-        }
+struct SeasonPalette { vec3 skyTint; vec3 hazeCol; vec3 foliageCol; float mood; };
 
-        void main() {
-          float t = uTime;
-          float TAU = 6.28318;
-          vec2 uv = vUv;
+SeasonPalette seasonPalette(vec4 w){
+  // осень — охра/бордо, ржавая дымка, тёплый тлен
+  vec3 aSky = vec3(0.92, 0.84, 0.74);
+  vec3 aHaze= vec3(0.55, 0.42, 0.30);
+  vec3 aFol = vec3(0.46, 0.33, 0.16);
+  float aMood = 0.94;
+  // зима — холодная сталь, молочный горизонт, самый тусклый день
+  vec3 wSky = vec3(0.78, 0.84, 0.96);
+  vec3 wHaze= vec3(0.70, 0.74, 0.82);
+  vec3 wFol = vec3(0.34, 0.37, 0.42);
+  float wMood = 0.80;
+  // весна — промытое серо-зелёное, первая бледная зелень
+  vec3 sSky = vec3(0.86, 0.90, 0.88);
+  vec3 sHaze= vec3(0.52, 0.58, 0.55);
+  vec3 sFol = vec3(0.34, 0.45, 0.26);
+  float sMood = 0.97;
+  // лето (приглушённое) — выгоревшее тёплое небо, пыльная марь
+  vec3 uSky = vec3(0.90, 0.88, 0.78);
+  vec3 uHaze= vec3(0.58, 0.55, 0.44);
+  vec3 uFol = vec3(0.33, 0.40, 0.22);
+  float uMood = 0.92;
 
-          // --- Фаза суток (как раньше): день → закат → ночь → рассвет ---
-          float phase = fract(t / 360.0);
-          float sun = cos(phase * TAU);
-          float dayF = smoothstep(-0.08, 0.45, sun);
-          float nightF = 1.0 - dayF;
-          float duskMix = smoothstep(0.55, 0.0, abs(sun));
+  SeasonPalette p;
+  p.skyTint    = aSky*w.x + wSky*w.y + sSky*w.z + uSky*w.w;
+  p.hazeCol    = aHaze*w.x + wHaze*w.y + sHaze*w.z + uHaze*w.w;
+  p.foliageCol = aFol*w.x + wFol*w.y + sFol*w.z + uFol*w.w;
+  p.mood       = aMood*w.x + wMood*w.y + sMood*w.z + uMood*w.w;
+  return p;
+}
 
-          // --- Погодный цикл: ясно → туман → дождь → туман → ясно ---
-          // Период ~110 c, не кратен суткам (360 c) — дождь застаёт разное время суток.
-          // Вне окон дождя/тумана (wc 0..0.18 и 0.82..1.0) — ясно, окно «отдыхает».
-          float wc = fract(t / 110.0);
-          float rain = smoothstep(0.34, 0.44, wc) * smoothstep(0.66, 0.56, wc);  // ливень в середине цикла
-          float wetW = smoothstep(0.32, 0.44, wc) * smoothstep(0.78, 0.60, wc);  // капли держатся дольше дождя
-          float fog  = smoothstep(0.18, 0.34, wc) * smoothstep(0.82, 0.64, wc);  // туман шире: раньше приходит, позже тает
-          float cloud = clamp(max(rain, fog), 0.0, 1.0);                         // облачность
-          float clarity = 1.0 - 0.9 * cloud;                                     // в дождь/туман светило и звёзды гаснут
+// сдвиг порога dayF: зима темнее/короче, весна/лето длиннее
+float seasonDayBias(vec4 w){
+  return 0.16*w.y - 0.10*w.z - 0.06*w.w;
+}
 
-          // --- Капли на стекле: смещение преломления (refr), блик (spec), мокрость (wet) ---
-          vec2 refr = vec2(0.0);
-          float spec = 0.0;
-          float wet = 0.0;
+// =====================================================================
+//  СЕЗОННЫЕ ЧАСТИЦЫ
+// =====================================================================
 
-          // Стекающие подтёки — крупные капли ползут вниз с извилистым следом
-          for (int i = 0; i < 8; i++){
-            float fi = float(i);
-            float s1 = hash1(fi * 12.9 + 0.5);
-            float s2 = hash1(fi * 4.7 + 1.3);
-            float colX = fract(s1 * 7.3);                       // своя колонка у каждой капли
-            float speed = 0.04 + s2 * 0.09;                     // скорость стекания
-            float headY = 1.0 - fract(s1 * 3.1 + t * speed);    // голова капли: сверху вниз
-            float sway = sin((1.0 - headY) * 9.0 + s1 * 30.0) * 0.010; // лёгкое виляние следа
-            float dxw = uv.x - colX - sway;                     // отклонение по X (в uv)
-            float dx = dxw * uAspect;                           // то же, но «круглое» (с учётом пропорций)
-            float dyH = uv.y - headY;
-            float head = smoothstep(0.05, 0.0, sqrt(dx*dx + dyH*dyH));
-            float above = uv.y - headY;                         // мокрый след тянется НАД головой (где капля прошла)
-            float trail = smoothstep(0.016, 0.0, abs(dx))
-                        * smoothstep(0.0, 0.03, above) * smoothstep(0.5, 0.0, above);
-            float d = max(head, trail * 0.65);
-            refr -= vec2(dxw, dyH) * head * 0.5;                // голова — сильная линза
-            refr.x -= dxw * trail * 0.25;                       // след слегка смещает по X
-            spec += smoothstep(0.03, 0.0, sqrt((dx+0.012)*(dx+0.012) + (dyH-0.012)*(dyH-0.012))) * head;
-            wet = max(wet, d);
-          }
+// осень: .x маска листвы, .y разброс оттенка (охра<->бордо)
+vec3 autumnLeaves(vec2 uv, float t, float asp){
+  vec3 acc = vec3(0.0);
+  for (int k = 0; k < 3; k++){
+    float fk = float(k);
+    float depth = 1.0 - fk * 0.30;
+    float n = 5.0 + fk * 3.0;
+    float fall = t * (0.045 + fk * 0.02);
+    float x = uv.x * n;
+    float coli = floor(x);
+    float seed = hash1(coli + fk * 31.0);
+    float yPos = fract(uv.y + fall + seed);
+    float spin = 0.6 + 0.4 * sin(t * (1.5 + seed * 2.0) + seed * 12.0); // кувыркание
+    float leaf = smoothstep(0.045 * (0.6 + spin*0.4), 0.0,
+                  aspDist(vec2((fract(x)-0.5)/n, uv.y - fract(1.0 - yPos)), asp));
+    leaf *= step(0.45, seed);
+    float m = leaf * depth;
+    acc.x = max(acc.x, m);
+    acc.y += (seed - 0.5) * m;
+  }
+  return acc;
+}
 
-          // Россыпь мелких капель — «запотевшее» стекло; медленно набухают и сохнут
-          vec2 q = vec2(uv.x * uAspect, uv.y) * 24.0;
-          vec2 id = floor(q);
-          vec2 f = fract(q) - 0.5;
-          vec2 jit = (vec2(hash(id), hash(id + 7.1)) - 0.5) * 0.7;  // случайный сдвиг центра в клетке
-          float dd = length(f - jit);
-          float sz = 0.16 + 0.16 * hash(id + 3.3);
-          float md = smoothstep(sz, sz * 0.35, dd);
-          md *= smoothstep(-0.2, 0.5, sin(t * 0.22 + hash(id + 1.9) * TAU)); // «жизнь» капли
-          refr -= (f - jit) * md * 0.015;
-          spec += smoothstep(sz * 0.5, 0.0, length((f - jit) + vec2(0.05, -0.05))) * md * 0.6;
-          wet = max(wet, md * 0.6);
+// зима: .x хлопья, .y молочная мгла (3 слоя для перфоманса iPad)
+vec2 winterSnow(vec2 uv, float t, float asp){
+  float flakes = 0.0;
+  float gust = sin(t * 0.13) * 0.5 + sin(t * 0.37 + 1.7) * 0.25;
+  for (int k = 0; k < 3; k++){
+    float fk = float(k);
+    float depth = 1.0 - fk * 0.22;
+    float n = 22.0 + fk * 26.0;
+    float speed = 0.06 + fk * 0.05;
+    float drift = gust * (0.10 + fk * 0.06);
+    vec2 puv = uv;
+    puv.x += uv.y * drift + t * drift * 0.6;
+    float x = puv.x * n;
+    float coli = floor(x);
+    float seed = hash1(coli + fk * 71.0);
+    float seg = 0.16 + seed * 0.10;
+    float ph = fract((puv.y + t * speed * (0.8 + seed)) / seg);
+    float fx = fract(x) - 0.5;
+    float fl = smoothstep(0.5, 0.0, aspDist(vec2(fx / n, (ph - 0.5) * seg), asp) * (5.0 + fk));
+    fl *= step(0.25, seed);
+    flakes += fl * depth * (0.8 - fk * 0.12);
+  }
+  flakes = clamp(flakes, 0.0, 1.0);
+  float haze = (0.30 + 0.30 * (0.5 + 0.5 * gust));
+  return vec2(flakes, haze);
+}
 
-          // Капли есть, только пока сыро (во время дождя и немного после)
-          refr *= wetW; spec *= wetW; wet *= wetW;
+// весна: .x лепестки, .y лёгкая морось
+vec2 springPetals(vec2 uv, float t, float asp){
+  float petals = 0.0;
+  for (int k = 0; k < 2; k++){
+    float fk = float(k);
+    float depth = 1.0 - fk * 0.35;
+    float n = 4.0 + fk * 3.0;
+    float fall = t * (0.03 + fk * 0.012);
+    float x = uv.x * n;
+    float coli = floor(x);
+    float seed = hash1(coli + fk * 23.0);
+    float yPos = fract(uv.y + fall + seed);
+    float sway = sin(uv.y * 5.0 + t * (1.1 + seed) + seed * 9.0) * 0.08;
+    float fx = fract(x) - 0.5 - sway * n;
+    float p = smoothstep(0.05, 0.0, aspDist(vec2(fx / n, uv.y - (1.0 - yPos)), asp));
+    p *= step(0.6, seed);
+    petals = max(petals, p * depth);
+  }
+  float drizzle = 0.0;
+  for (int k = 0; k < 2; k++){
+    float fk = float(k);
+    float nn = 50.0 + fk * 40.0;
+    float x = (uv.x + uv.y * 0.10) * nn;
+    float coli = floor(x);
+    float seed = hash1(coli + fk * 19.0);
+    float seg = 0.18 + seed * 0.10;
+    float ph = fract((uv.y + t * (0.5 + seed * 0.3)) / seg);
+    float fx = fract(x) - 0.5;
+    float d = smoothstep(0.5, 0.0, abs(fx)) * smoothstep(0.0, 0.2, ph) * smoothstep(1.0, 0.4, ph);
+    d *= step(0.55, seed);
+    drizzle += d * (0.4 - fk * 0.12);
+  }
+  return vec2(petals, clamp(drizzle, 0.0, 1.0));
+}
 
-          // --- Пейзаж, преломлённый каплями ---
-          vec3 col = scene(uv + refr, phase, dayF, nightF, duskMix, clarity);
+// лето: .x тополиный пух, .y тепловое марево
+vec2 summerFluff(vec2 uv, float t, float asp){
+  float fluff = 0.0;
+  for (int k = 0; k < 3; k++){
+    float fk = float(k);
+    float depth = 1.0 - fk * 0.28;
+    float n = 6.0 + fk * 5.0;
+    float driftX = t * (0.012 + fk * 0.006);
+    float bob = sin(t * (0.5 + fk * 0.3) + fk) * 0.04;
+    vec2 puv = uv;
+    puv.x += driftX;
+    float x = puv.x * n;
+    float coli = floor(x);
+    float seed = hash1(coli + fk * 17.0);
+    float yBase = fract(seed * 5.0) + bob + sin(t * 0.2 + seed * 6.0) * 0.10;
+    float fx = fract(x) - 0.5;
+    float f = smoothstep(0.06, 0.0, aspDist(vec2(fx / n, puv.y - yBase), asp));
+    f *= step(0.5, seed);
+    fluff = max(fluff, f * depth * 0.8);
+  }
+  // приглушённая пыльная марь — низкая частота, медленная (не скан-линия)
+  float heat = smoothstep(0.5, 0.1, uv.y)
+             * (0.5 + 0.5 * sin(uv.x * 7.0 + t * 0.6 + sin(uv.y * 12.0) * 0.4));
+  return vec2(fluff, clamp(heat, 0.0, 1.0));
+}
 
-          // Пасмурность: во время дождя пейзаж сереет (свинцовое небо)
-          vec3 overcast = mix(vec3(0.20,0.21,0.24), vec3(0.08,0.08,0.12), nightF);
-          col = mix(col, overcast, rain * 0.4);
+// зимний иней из углов окна внутрь
+float winterFrost(vec2 uv, float t, float asp){
+  vec2 c = abs(uv - 0.5) * 2.0;
+  float corner = c.x * c.y;
+  float edge = hash(floor(uv * vec2(40.0, 18.0)));
+  float crawl = 0.55 + 0.20 * sin(t * 0.03);
+  float frost = smoothstep(crawl - 0.25, crawl + 0.05, corner + edge * 0.18);
+  float vein = smoothstep(0.04, 0.0, abs(fract(uv.x * 22.0 + uv.y * 14.0) - 0.5)) * corner;
+  return clamp(frost * 0.9 + vein * 0.25, 0.0, 1.0);
+}
 
-          // Дождь-струи поверх пейзажа
-          float fall = rainFall(uv, t) * rain;
-          col += vec3(0.55, 0.60, 0.68) * fall * 0.30;
+// =====================================================================
+//  ЛУНА / СОЛНЦE / ЗВЁЗДЫ
+// =====================================================================
 
-          // --- Туман: молочная пелена, гуще у низа (стелется), медленно клубится ---
-          vec3 fogCol = mix(vec3(0.62,0.63,0.67), vec3(0.17,0.18,0.25), nightF);
-          float fy = smoothstep(0.85, 0.05, uv.y);                    // плотнее к горизонту
-          float swirl = 0.82 + 0.18 * sin(uv.x * 5.0 - t * 0.18 + uv.y * 4.0);
-          col = mix(col, fogCol, fog * (0.34 + 0.55 * fy) * swirl);
+// решение «полнолуние сегодня?» — стабильно на всю ночь (зависит от floor(t/360))
+float fullMoonNight(float t){
+  float dayIndex = floor(t / 360.0);
+  float r = hash1(dayIndex * 1.731 + 4.20);
+  return smoothstep(0.62, 0.72, r);
+}
 
-          // --- Редкие вспышки молнии во время сильного дождя ---
-          // Время бьётся на «слоты» ~6 c; в части слотов случается вспышка.
-          float strongRain = smoothstep(0.6, 0.95, rain);
-          float lt = t * 0.16;
-          float lseg = floor(lt);
-          float strike = step(0.82, hash1(lseg + 41.0));          // ~18% слотов — с молнией
-          float lph = fract(lt);
-          // Двойное мигание: резкий пик + дрожание + быстрый спад
-          float flash = strike * exp(-lph * 26.0) * (0.65 + 0.35 * sin(lph * 130.0)) * strongRain;
-          float skyHi = 0.45 + 0.6 * smoothstep(0.0, 0.7, uv.y);  // вверху неба ярче
-          col += vec3(0.72, 0.80, 1.0) * max(flash, 0.0) * skyHi * 0.82;
+// луна: диск + гало, отдаёт центр (moonPos) и стабильный световой вектор (moonDir)
+vec3 moonRender(vec2 uv, float phase, float moonFull, float nightF, float clarity,
+                out vec2 moonPos, out vec2 moonDir){
+  float TAU = 6.28318;
+  // та же угловая скорость, что у солнца, но в противофазе:
+  // луна поднимается ночью, заходит днём — полная дуга через всё небо
+  float ma = phase * TAU;
+  vec2 mp = vec2(0.5 + 0.40 * sin(ma + 3.14159), 0.30 + 0.50 * cos(ma + 3.14159));
+  moonPos = mp;
 
-          // Косой блик на стекле (в ливень приглушаем, чтобы не спорил со струями)
-          col += vec3(0.6,0.65,0.7) * smoothstep(0.02, 0.0, abs((uv.x - uv.y) + 0.18)) * 0.12 * (1.0 - rain * 0.5);
+  vec2 d = uv - mp; d.x *= uAspect;
+  float r = length(d);
 
-          // Капли на стекле — самый ближний слой, поверх всего: тень линзы + яркий блик
-          col *= (1.0 - wet * 0.12);
-          col += vec3(0.85, 0.9, 1.0) * spec * 0.55;
+  float rad = mix(0.052, 0.105, moonFull);
+  float disc = smoothstep(rad, rad * 0.82, r);
 
-          gl_FragColor = vec4(col, 0.93);
-        }
+  // вырез серпа на неполных ночах
+  vec2 cofs = vec2(0.62, 0.18) * rad * (0.55 + 0.9 * (1.0 - moonFull));
+  vec2 dc = (uv - (mp + cofs)); dc.x *= uAspect;
+  float carve = smoothstep(rad * 0.985, rad * 0.80, length(dc));
+  float lit = clamp(disc - carve * (1.0 - moonFull), 0.0, 1.0);
+
+  // «моря» на диске — низкочастотный шум
+  vec2 mg = floor((d + 0.5) * 26.0);
+  float m1 = hash(mg);
+  float m2 = hash(mg + 13.7);
+  float maria = mix(m1, m2, 0.5) * 0.5 + 0.5;
+  float seas = mix(0.80, 1.0, smoothstep(0.35, 0.85, maria));
+  float limb = mix(0.78, 1.0, smoothstep(rad, rad * 0.2, r));
+
+  vec3 moonCol = mix(vec3(0.78, 0.82, 0.90), vec3(0.92, 0.92, 0.86), moonFull);
+  vec3 body = moonCol * seas * limb;
+
+  float haloR = mix(0.16, 0.42, moonFull);
+  float halo  = smoothstep(haloR, 0.0, r);
+  halo = pow(halo, 1.6);
+  float haloAmt = (0.10 + 0.55 * moonFull) * clarity;
+  vec3 haloCol = vec3(0.55, 0.66, 0.85);
+
+  vec3 outc = body * lit
+            + haloCol * halo * haloAmt * nightF;
+
+  // глобальный световой вектор — смещение луны от центра кадра.
+  // Стабилен на весь кадр (не зависит от шейдингового пикселя),
+  // поэтому грань-rim города не «щёлкает» по вертикали под луной.
+  moonDir = mp - vec2(0.5);
+  return outc * nightF;
+}
+
+// звёздное поле: 2 слоя + слабый млечный смаз
+vec3 starField(vec2 uv, float t){
+  float TAU = 6.28318;
+  vec3 acc = vec3(0.0);
+  for (int L = 0; L < 2; L++){
+    float fl = float(L);
+    vec2 cells = mix(vec2(58.0, 38.0), vec2(104.0, 66.0), fl);
+    vec2 gp = uv * cells;
+    vec2 id = floor(gp);
+    vec2 fp = fract(gp) - 0.5;
+    vec2 jit = (vec2(hash(id + fl * 7.0), hash(id + fl * 19.0)) - 0.5) * 0.8;
+    float dst = length(fp - jit);
+    float seed = hash(id + fl * 31.0);
+    float present = step(mix(0.86, 0.78, fl), seed);
+    float bright = (0.35 + 0.65 * hash(id + fl * 53.0)) * mix(1.0, 0.55, fl);
+    float core = smoothstep(0.055, 0.0, dst) * present * bright;
+    float tw = 0.55 + 0.45 * sin(t * (1.6 + seed * 2.4) + seed * TAU * 6.0);
+    vec3 tint = mix(vec3(0.86, 0.90, 1.0), vec3(1.0, 0.90, 0.78), step(0.92, seed));
+    acc += tint * core * tw;
+  }
+  float band = smoothstep(0.55, 0.0, abs((uv.y - 0.62) - (uv.x - 0.5) * 0.35));
+  vec2 ng = floor(uv * vec2(40.0, 26.0));
+  float milk = (hash(ng) * 0.5 + hash(ng + 5.0) * 0.5);
+  milk = smoothstep(0.45, 1.0, milk);
+  acc += vec3(0.30, 0.34, 0.42) * band * milk * 0.045;
+  return acc;
+}
+
+float moonWashAmount(float moonFull, float nightF, float clarity){
+  return moonFull * nightF * clarity;
+}
+
+// =====================================================================
+//  НЕБО + ГОРОД
+// =====================================================================
+
+vec3 skyGradient(vec2 uv, float dayF, float nightF, float duskMix,
+                 vec3 seasonTint, float moonWash){
+  float g = smoothstep(0.0, 1.0, uv.y);
+  vec3 night = mix(vec3(0.085,0.090,0.170), vec3(0.020,0.022,0.060), g);
+  vec3 day   = mix(vec3(0.700,0.710,0.700), vec3(0.420,0.500,0.620), g);
+  vec3 dusk  = mix(vec3(0.960,0.500,0.280), vec3(0.200,0.130,0.330),
+                   smoothstep(0.0,0.85,uv.y));
+  vec3 col = mix(night, day, dayF);
+  col = mix(col, dusk, duskMix*0.75);
+  // холодный лунный налёт высоко в ночном небе
+  col += vec3(0.10,0.13,0.20) * moonWash * smoothstep(0.20,1.0,uv.y) * 0.35;
+  // мягкий сезонный сдвиг палитры
+  col = mix(col, col*seasonTint, 0.55);
+  return col;
+}
+
+// один параллакс-слой панелек -> vec4(rgb, покрытие)
+vec4 cityLayer(vec2 uv, float layer, float baseY, float blockW,
+               float density, float dayF, float nightF, float duskMix,
+               vec3 skyRef, vec3 seasonTint, float snowF, float moonWash,
+               float moonDirX){
+  float far  = step(layer, 0.5);
+  float near = step(1.5, layer);
+
+  float ph  = layer * 0.37;
+  float bf  = uv.x/blockW + ph;
+  float bi  = floor(bf);
+  float fb  = fract(bf);
+  float seed = hash(vec2(bi, layer*13.0 + 1.0));
+  float seed2= hash(vec2(bi*1.7, layer*5.0 + 9.0));
+
+  float hLow  = 0.16 + 0.06*far;
+  float hHigh = mix(0.30, 0.50, near);
+  float topY  = baseY + mix(hLow, hHigh, seed);
+  float stepTop = topY - (0.03 + 0.05*seed2)*step(0.5, seed2);
+  float useStep = step(0.62, hash(vec2(bi, 7.0+layer)));
+  float gap = 0.06 + 0.05*far;
+  float inBlock = step(gap*0.5, fb) * step(fb, 1.0 - gap*0.5);
+  float rightSec = step(0.60, fb);
+  float roofY = mix(topY, mix(topY, stepTop, useStep), rightSec);
+
+  float cover = inBlock * step(uv.y, roofY);
+
+  // фасад: брутальный бетон, день/ночь
+  vec3 cDark = mix(vec3(0.045,0.045,0.075), vec3(0.085,0.090,0.110), dayF);
+  vec3 cLit  = mix(vec3(0.075,0.075,0.105), vec3(0.150,0.155,0.175), dayF);
+  float edge = smoothstep(0.5-gap, 0.5, fb);
+  vec3 facade = mix(cDark, cLit, edge);
+  float vshade = mix(0.78, 1.06, smoothstep(baseY-0.04, roofY, uv.y));
+  facade *= vshade;
+  facade += vec3(0.18,0.09,0.05) * duskMix * smoothstep(0.6,1.0,fb) * (0.4+0.6*near);
+
+  // горизонтальные межпанельные швы
+  float floors = 5.0 + floor(seed*4.0);
+  float fy = (uv.y - baseY) / max(roofY - baseY, 0.001);
+  float rows = fy * floors;
+  float seamY = abs(fract(rows) - 0.5);
+  float seam  = smoothstep(0.06, 0.0, seamY) * 0.5;
+  facade *= (1.0 - seam*0.30*cover);
+
+  // вертикальные балконные полосы на части блоков
+  float hasBalcony = step(0.45, hash(vec2(bi+31.0, layer)));
+  float bx2 = abs(fract(fb*3.0) - 0.5);
+  float balcony = hasBalcony * smoothstep(0.10,0.0,bx2) * 0.5
+                  * step(baseY+0.02, uv.y) * step(uv.y, roofY-0.01);
+  facade *= (1.0 - balcony*0.22);
+
+  // окна: мелкая сетка по этажам
+  float wcols = 3.0 + near*2.0;
+  float wxLocal = (fb - gap*0.5) / (1.0 - gap);
+  vec2 wc = vec2(wxLocal*wcols, rows);
+  vec2 wcell = floor(wc);
+  vec2 wf = fract(wc);
+  float pane = step(0.20,wf.x)*step(wf.x,0.80)*step(0.18,wf.y)*step(wf.y,0.78);
+  pane *= step(baseY, uv.y) * cover;
+
+  float wseed = hash(wcell + bi*17.0 + layer*3.0);
+  float litChance = mix(0.30, 0.62, density) * (0.55 + 0.45*near);
+  float lit = step(1.0 - litChance, wseed);
+  float flick = 0.92 + 0.08*sin(uTime*1.7 + wseed*40.0);
+  // редкий «синий телевизор» — реже и медленнее, чтобы не было строб-эффекта
+  float tvWin = step(0.94, hash(wcell + 91.0));
+  float tvFlick = 0.6 + 0.4*sin(uTime*3.0 + wseed*12.0);
+  vec3 warm = vec3(1.00,0.74,0.38);
+  vec3 tv   = vec3(0.40,0.52,0.72);   // приглушённый холодный, в палитре
+  vec3 winLight = mix(warm, tv, tvWin);
+  float winFlick = mix(flick, tvFlick, tvWin);
+
+  float skyLumDir = smoothstep(0.0,1.0,fb);
+  vec3 dayGlass = mix(facade*0.55, skyRef*0.7, 0.35 + 0.25*skyLumDir);
+  vec3 nightWin = winLight * winFlick;
+
+  float winNight = lit * nightF * (0.92 - 0.45*far);
+  facade = mix(facade, dayGlass, pane*dayF*0.9);
+  facade = mix(facade, nightWin, pane*winNight);
+
+  // крыши: мачта-антенна / приземистый бак
+  float hasAnt = step(0.55, hash(vec2(bi*2.0+5.0, layer)));
+  float mastX  = 0.5 + (seed2-0.5)*0.4;
+  float mast   = hasAnt * smoothstep(0.012,0.0,abs(fb-mastX))
+                 * step(roofY, uv.y) * step(uv.y, roofY+0.06+0.05*seed2)
+                 * (1.0-far);
+  float hasTank = step(0.62, hash(vec2(bi+19.0, layer*2.0)));
+  float tankX = 0.30 + 0.4*seed;
+  vec2 td = vec2((fb-tankX), (uv.y-(roofY+0.018)));
+  td.x *= 0.5;
+  float tank = hasTank * smoothstep(0.030,0.022,length(td)) * (1.0-far);
+  float roofStuff = clamp(max(mast, tank), 0.0, 1.0);
+  cover = max(cover, roofStuff);
+  facade = mix(facade, mix(cDark,cLit,0.3)*0.7, roofStuff);
+
+  // зимний снег на карнизах/подоконниках
+  vec3 snowCol = mix(vec3(0.78,0.80,0.86), vec3(0.30,0.33,0.45), nightF);
+  float roofCap = smoothstep(0.022,0.0, roofY - uv.y) * cover;
+  float sill = step(0.78, wf.y) * pane;
+  float snowMask = clamp(max(roofCap*0.9, sill*0.5), 0.0, 1.0) * snowF;
+  facade = mix(facade, snowCol, snowMask);
+  facade += vec3(0.06,0.08,0.12) * moonWash * roofCap * near;
+
+  // лунный rim на грани, обращённой к луне (стабильный световой вектор)
+  float moonFace = (moonDirX < 0.0)
+        ? smoothstep(gap, 0.0, fb)
+        : smoothstep(1.0-gap, 1.0, fb);
+  float rimEdge = max(roofCap, moonFace * cover);
+  facade += vec3(0.50,0.60,0.80) * rimEdge * moonWash * 0.30 * near;
+
+  // воздушная перспектива — главный лекарь от «картона»
+  float hazeAmt = mix(0.62, 0.10, layer*0.5);
+  hazeAmt += 0.10*smoothstep(baseY+0.10, baseY, uv.y);
+  hazeAmt += 0.06*duskMix;
+  vec3 hazeCol = mix(skyRef, skyRef*seasonTint, 0.5);
+  facade = mix(facade, hazeCol, clamp(hazeAmt,0.0,0.92));
+
+  return vec4(facade, cover);
+}
+
+// провода ЛЭП с провисанием + наклонный столб
+float powerLines(vec2 uv, float baseY){
+  float yA = baseY + 0.26;
+  float yB = baseY + 0.33;
+  // парабола катенарии, аргумент зажат в [0,1] — провод всегда провисает вниз
+  float tA = clamp(abs(uv.x-0.5)*2.0, 0.0, 1.0);
+  float tB = clamp(abs(uv.x-0.42)*2.0, 0.0, 1.0);
+  float sagA = 0.045 * (1.0 - tA*tA);
+  float sagB = 0.035 * (1.0 - tB*tB);
+  float w1 = smoothstep(0.0040,0.0, abs(uv.y - (yA - sagA)));
+  float w2 = smoothstep(0.0032,0.0, abs(uv.y - (yB - sagB)));
+  float poleX = 0.78;
+  float pole = smoothstep(0.010,0.0, abs(uv.x - (poleX + (uv.y-baseY)*0.04)))
+               * step(baseY-0.02, uv.y) * step(uv.y, yB+0.06);
+  float arm = smoothstep(0.006,0.0, abs(uv.y - (yB+0.02)))
+              * step(poleX-0.05, uv.x) * step(uv.x, poleX+0.05);
+  return clamp(max(max(w1*0.75, w2*0.6), max(pole*0.85, arm*0.7)), 0.0, 1.0);
+}
+
+// компоновщик города: 3 слоя дальний->ближний + провода
+vec3 cityscape(vec2 uv, vec3 col, float dayF, float nightF, float duskMix,
+               vec3 seasonTint, float snowF, float moonWash, float moonDirX){
+  vec3 skyRef = col;
+
+  vec4 L0 = cityLayer(uv, 0.0, 0.26, 0.085, 0.30,
+                      dayF,nightF,duskMix, skyRef, seasonTint, snowF, moonWash, moonDirX);
+  col = mix(col, L0.rgb, L0.a);
+
+  vec4 L1 = cityLayer(uv, 1.0, 0.195, 0.135, 0.55,
+                      dayF,nightF,duskMix, skyRef, seasonTint, snowF, moonWash, moonDirX);
+  col = mix(col, L1.rgb, L1.a);
+
+  vec4 L2 = cityLayer(uv, 2.0, 0.125, 0.230, 0.80,
+                      dayF,nightF,duskMix, skyRef, seasonTint, snowF, moonWash, moonDirX);
+  col = mix(col, L2.rgb, L2.a);
+
+  float wires = powerLines(uv, 0.125);
+  col = mix(col, vec3(0.030,0.030,0.050), wires*0.75);
+  return col;
+}
+
+// =====================================================================
+//  ПЕЙЗАЖ ЗА ОКНОМ (преломляется каплями: scene(uv+refr,...))
+// =====================================================================
+vec3 scene(vec2 uv, float phase, float dayF, float nightF, float duskMix,
+           float clarity, SeasonPalette pal, float snowF, float moonFull){
+  float TAU = 6.28318;
+
+  float moonWash = moonWashAmount(moonFull, nightF, clarity);
+
+  // небо
+  vec3 col = skyGradient(uv, dayF, nightF, duskMix, pal.skyTint, moonWash);
+
+  // лунный амбиент — серебряная ванна всей ночной сцены
+  col += vec3(0.10, 0.13, 0.20) * moonWash * (0.35 + 0.65 * smoothstep(0.0,1.0,uv.y));
+
+  // звёзды — гаснут в полнолуние и в тучах (compute только ночью)
+  if (nightF > 0.01){
+    vec3 stars = starField(uv, uTime);
+    col += stars * nightF * clarity * (1.0 - moonFull);
+  }
+
+  // солнце — только днём
+  float ang = phase * TAU;
+  vec2 sp = vec2(0.5 + 0.42*sin(ang), 0.32 + 0.52*cos(ang));
+  float ds = distance((uv - sp) * vec2(1.0, 0.9), vec2(0.0));
+  vec3 sunCol = vec3(1.0, 0.92, 0.74);
+  col += sunCol * smoothstep(0.30, 0.0, ds) * 0.22 * clarity * dayF;
+  col  = mix(col, sunCol, smoothstep(0.05, 0.035, ds) * clarity * dayF);
+
+  // луна — только ночью
+  vec2 moonPos; vec2 moonDir;
+  col += moonRender(uv, phase, moonFull, nightF, clarity, moonPos, moonDir);
+
+  // город (3 слоя + провода, своя воздушная перспектива и снег на крышах)
+  col = cityscape(uv, col, dayF, nightF, duskMix, pal.skyTint, snowF, moonWash, moonDir.x);
+
+  // дальняя зелень/листва у горизонта — узкая полоса НИЖЕ ближних домов,
+  // чтобы не замыливать фасады; видна в основном днём
+  float folBand = smoothstep(0.10, 0.0, abs(uv.y - 0.105)) * smoothstep(0.0, 0.05, uv.y);
+  col = mix(col, mix(col, pal.foliageCol, 0.45), folBand * 0.35 * dayF);
+
+  // дымка у горизонта — сезонный hazeCol
+  float haze = smoothstep(0.45, 0.16, uv.y) * smoothstep(0.0, 0.16, uv.y);
+  col = mix(col, mix(pal.hazeCol, pal.hazeCol*mix(1.0,0.35,nightF), nightF), haze*0.35);
+
+  // лунное отражение — слабая серебряная полоса низко под луной
+  float reflX = abs((uv.x - moonPos.x) * uAspect);
+  float refl  = smoothstep(0.10, 0.0, reflX)
+              * smoothstep(0.40, 0.12, uv.y) * smoothstep(0.0, 0.10, uv.y);
+  col += vec3(0.55, 0.66, 0.85) * refl * moonWash * 0.18;
+
+  return col;
+}
+
+// косой дождь-струи за стеклом (3 слоя для глубины)
+float rainFall(vec2 uv, float t){
+  uv.x += uv.y * 0.16;
+  float acc = 0.0;
+  for (int k = 0; k < 3; k++){
+    float fk = float(k);
+    float n = 70.0 + fk * 46.0;
+    float x = uv.x * n;
+    float coli = floor(x);
+    float fx = fract(x) - 0.5;
+    float seed = hash1(coli + fk * 57.0);
+    float speed = (0.55 + seed * 0.5) * (1.0 + fk * 0.45);
+    float seg = 0.10 + seed * 0.10;
+    float ph = fract((uv.y + t * speed) / seg);
+    float drop = smoothstep(0.5, 0.0, abs(fx))
+               * smoothstep(0.0, 0.14, ph) * smoothstep(1.0, 0.35, ph);
+    drop *= step(0.30, seed);
+    acc += drop * (0.65 - fk * 0.13);
+  }
+  return clamp(acc, 0.0, 1.0);
+}
+
+void main() {
+  float t = uTime;
+  float TAU = 6.28318;
+  vec2 uv = vUv;
+
+  // (1) сезоны — задают всё ниже
+  vec4 sw = seasonWeights(t);
+  SeasonPalette pal = seasonPalette(sw);
+  float snowF = sw.y;
+
+  // (2) сутки, сдвинутые по сезону (зимой темнее/короче)
+  float phase = fract(t / 360.0);
+  float sun = cos(phase * TAU);
+  float bias = seasonDayBias(sw);
+  float dayF = smoothstep(-0.08 + bias, 0.45 + bias, sun);
+  float nightF = 1.0 - dayF;
+  float duskMix = smoothstep(0.55, 0.0, abs(sun));
+
+  // (3) погодный цикл — тайминг прежний, смысл переосмыслен по сезону
+  float wc = fract(t / 110.0);
+  float rainRaw = smoothstep(0.34, 0.44, wc) * smoothstep(0.66, 0.56, wc);
+  float wetW = smoothstep(0.32, 0.44, wc) * smoothstep(0.78, 0.60, wc);
+  float fog  = smoothstep(0.18, 0.34, wc) * smoothstep(0.82, 0.64, wc);
+
+  float snowfall = rainRaw * sw.y;               // зима: окно дождя -> снегопад
+  float rainKeep = rainRaw * (sw.x + sw.z*0.6);  // осень — полный дождь, весна — мягче
+  float drizzleW = rainRaw * sw.z;               // весна: лёгкая морось
+  float rain = rainKeep;                         // струи: зима/лето подавлены
+  float cloud = clamp(max(rain, fog), 0.0, 1.0) * (1.0 - 0.4*sw.w); // лето яснее
+  float clarity = 1.0 - 0.9 * cloud;
+
+  // (4) сезонное полнолуние (стабильно на ночь)
+  float moonFull = fullMoonNight(t);
+
+  // (5) капли на стекле — только осень+весна; зимой иней, летом сухо
+  wetW *= (sw.x + sw.z);
+
+  vec2 refr = vec2(0.0);
+  float spec = 0.0;
+  float wet = 0.0;
+
+  // капли считаем только пока стекло мокрое — экономия для iPad
+  if (wetW > 0.001){
+    // стекающие подтёки
+    for (int i = 0; i < 8; i++){
+      float fi = float(i);
+      float s1 = hash1(fi * 12.9 + 0.5);
+      float s2 = hash1(fi * 4.7 + 1.3);
+      float colX = fract(s1 * 7.3);
+      float speed = 0.04 + s2 * 0.09;
+      float headY = 1.0 - fract(s1 * 3.1 + t * speed);
+      float sway = sin((1.0 - headY) * 9.0 + s1 * 30.0) * 0.010;
+      float dxw = uv.x - colX - sway;
+      float dx = dxw * uAspect;
+      float dyH = uv.y - headY;
+      float head = smoothstep(0.05, 0.0, sqrt(dx*dx + dyH*dyH));
+      float above = uv.y - headY;
+      float trail = smoothstep(0.016, 0.0, abs(dx))
+                  * smoothstep(0.0, 0.03, above) * smoothstep(0.5, 0.0, above);
+      float d = max(head, trail * 0.65);
+      refr -= vec2(dxw, dyH) * head * 0.5;
+      refr.x -= dxw * trail * 0.25;
+      spec += smoothstep(0.03, 0.0, sqrt((dx+0.012)*(dx+0.012) + (dyH-0.012)*(dyH-0.012))) * head;
+      wet = max(wet, d);
+    }
+
+    // россыпь мелких капель — «запотевшее» стекло
+    vec2 q = vec2(uv.x * uAspect, uv.y) * 24.0;
+    vec2 id = floor(q);
+    vec2 f = fract(q) - 0.5;
+    vec2 jit = (vec2(hash(id), hash(id + 7.1)) - 0.5) * 0.7;
+    float dd = length(f - jit);
+    float sz = 0.16 + 0.16 * hash(id + 3.3);
+    float md = smoothstep(sz, sz * 0.35, dd);
+    md *= smoothstep(-0.2, 0.5, sin(t * 0.22 + hash(id + 1.9) * TAU));
+    refr -= (f - jit) * md * 0.015;
+    spec += smoothstep(sz * 0.5, 0.0, length((f - jit) + vec2(0.05, -0.05))) * md * 0.6;
+    wet = max(wet, md * 0.6);
+
+    // капли только пока сыро
+    refr *= wetW; spec *= wetW; wet *= wetW;
+  }
+
+  // (6) пейзаж, преломлённый каплями
+  vec3 col = scene(uv + refr, phase, dayF, nightF, duskMix, clarity, pal, snowF, moonFull);
+
+  // пасмурность во время дождя
+  vec3 overcast = mix(pal.hazeCol*0.5, vec3(0.08,0.08,0.12), nightF);
+  col = mix(col, overcast, rain * 0.4);
+
+  // дождь-струи поверх (осень полный, весна мягче)
+  float fall = rainFall(uv, t) * rain;
+  col += vec3(0.55, 0.60, 0.68) * fall * 0.30;
+
+  // (7) сезонные частицы — каждый слой стоит почти ничего вне сезона
+  if (sw.x > 0.01){                              // ОСЕНЬ — листва
+    vec3 lf = autumnLeaves(uv, t, uAspect);
+    vec3 leafCol = mix(vec3(0.78,0.45,0.12), vec3(0.62,0.18,0.10), 0.5+0.5*lf.y);
+    col = mix(col, leafCol, lf.x * sw.x * (0.55 + 0.45*dayF));
+  }
+  if (sw.y > 0.01){                              // ЗИМА — снег, метель, иней
+    vec2 sn = winterSnow(uv, t, uAspect);
+    vec3 snowHazeCol = mix(vec3(0.70,0.74,0.82), vec3(0.20,0.22,0.30), nightF);
+    col = mix(col, snowHazeCol, sn.y * sw.y * 0.6);
+    col += vec3(0.92,0.94,1.0) * (snowfall + sn.x) * sw.y * 0.5;
+    float frost = winterFrost(uv, t, uAspect);
+    col = mix(col, vec3(0.86,0.90,0.97), frost * sw.y * 0.45);
+  }
+  if (sw.z > 0.01){                              // ВЕСНА — оттепель: морось + лепестки
+    vec2 spr = springPetals(uv, t, uAspect);
+    col += vec3(0.55,0.60,0.68) * spr.y * drizzleW * 0.18;
+    col = mix(col, vec3(0.95,0.86,0.88), spr.x * sw.z * 0.7);
+  }
+  if (sw.w > 0.01){                              // ЛЕТО (приглушённое) — марево + пух
+    vec2 su = summerFluff(uv, t, uAspect);
+    vec3 heatCol = mix(pal.hazeCol, vec3(0.20,0.18,0.16), nightF);
+    col = mix(col, heatCol, su.y * sw.w * 0.14 * dayF);
+    col = mix(col, vec3(0.94,0.93,0.90), su.x * sw.w * 0.6);
+  }
+
+  // туман: молочная пелена (сезонный цвет), гуще у низа
+  vec3 fogCol = mix(pal.hazeCol, pal.hazeCol*mix(1.0,0.35,nightF), nightF);
+  float fyf = smoothstep(0.85, 0.05, uv.y);
+  float swirl = 0.82 + 0.18 * sin(uv.x * 5.0 - t * 0.18 + uv.y * 4.0);
+  col = mix(col, fogCol, fog * (0.34 + 0.55 * fyf) * swirl);
+
+  // редкие вспышки молнии — осенью (и чуть весной), зимой/летом почти нет
+  float stormSeason = sw.x + sw.z * 0.5;
+  float strongRain = smoothstep(0.6, 0.95, rain);
+  float ltn = t * 0.16;
+  float lseg = floor(ltn);
+  float strike = step(0.82, hash1(lseg + 41.0));
+  float lph = fract(ltn);
+  float flash = strike * exp(-lph * 26.0) * (0.65 + 0.35 * sin(lph * 130.0)) * strongRain * stormSeason;
+  float skyHi = 0.45 + 0.6 * smoothstep(0.0, 0.7, uv.y);
+  col += vec3(0.72, 0.80, 1.0) * max(flash, 0.0) * skyHi * 0.82;
+
+  // косой блик на стекле (в ливень приглушаем)
+  col += vec3(0.6,0.65,0.7) * smoothstep(0.02, 0.0, abs((uv.x - uv.y) + 0.18)) * 0.12 * (1.0 - rain * 0.5);
+
+  // капли — самый ближний слой: тень линзы + яркий блик
+  col *= (1.0 - wet * 0.12);
+  col += vec3(0.85, 0.9, 1.0) * spec * 0.55;
+
+  // общий сезонный множитель настроения (зима тусклее)
+  col *= pal.mood;
+
+  // тонкий дизер против бандинга на 8-битном экране (одна hash, без новых юниформ)
+  col += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+
+  gl_FragColor = vec4(col, 0.93);
+}
       `,
     })
   );

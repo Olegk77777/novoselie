@@ -2,7 +2,7 @@
 // Все тексты — через функцию t() из locales/, в коде только ключи.
 // items: [{ id, name, iconUrl, count, enabled }] — из data/items.json (game.js).
 
-export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
+export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onCinema }) {
   // Десктоп (есть мышь и наведение) — показываем подписи горячих клавиш на кнопках.
   const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const hotkey = (key) => (isDesktop ? ` (${key})` : '');
@@ -18,6 +18,33 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   const toast = document.createElement('div');
   toast.id = 'ui-hint-toast';
   document.body.appendChild(toast);
+
+  // Кнопка «Любование»: прячет ВЕСЬ интерфейс, чтобы рассмотреть комнату без помех.
+  // Живёт отдельным fixed-элементом (не внутри HUD), поэтому остаётся видимой, когда
+  // HUD скрыт. Тумблер: первый клик прячет интерфейс (game.js двигает комнату в центр),
+  // повторный — возвращает. Глаз тонкий, амбер — чтобы не спорил с думерской картинкой.
+  const cinemaBtn = document.createElement('button');
+  cinemaBtn.id = 'ui-cinema';
+  cinemaBtn.type = 'button';
+  cinemaBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M1.5 12C4 6.5 20 6.5 22.5 12C20 17.5 4 17.5 1.5 12Z"/>' +
+    '<circle cx="12" cy="12" r="3.3"/></svg>';
+  let cinema = false;
+  function refreshCinema() {
+    cinemaBtn.title = t(cinema ? 'ui.cinema_show' : 'ui.cinema_hide');
+    cinemaBtn.setAttribute('aria-label', cinemaBtn.title);
+    cinemaBtn.classList.toggle('watching', cinema);
+    document.body.classList.toggle('cinema', cinema);
+  }
+  cinemaBtn.addEventListener('click', () => {
+    cinema = !cinema;
+    refreshCinema();
+    if (onCinema) onCinema(cinema);
+  });
+  document.body.appendChild(cinemaBtn);
+  refreshCinema();
 
   // Модальное уведомление для важных событий (квесты): крупно по центру, с кнопкой
   // ОК. События идут очередью — следующее показывается после закрытия текущего.

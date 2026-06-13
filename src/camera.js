@@ -47,7 +47,9 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
   // Сколько пикселей слева отдать под HUD (плашки уюта/заданий). Комната
   // вписывается в ПРАВУЮ область [reservedLeft, ширина] и сдвигается туда,
   // чтобы панель заданий не перекрывала комнату. 0 = комната по центру.
-  let reservedLeft = 0;
+  let reservedLeft = 0;        // фактически применяемая полоса (может анимироваться)
+  let reservedTarget = 0;      // цель «переезда» комнаты
+  let animatingReserved = false; // идёт ли плавный переезд
 
   // Габариты комнаты в координатах экрана (NDC) при zoom=1, симметричной рамке
   // без сдвига. Отдельно по X и Y — чтобы вписать по ширине и высоте раздельно.
@@ -98,10 +100,34 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
 
   // Ширина левой полосы под HUD (в пикселях). Сильнее ~42% экрана не ужимаем,
   // чтобы на узком телефоне комната не стала крошечной.
-  function setReservedLeft(px) {
-    reservedLeft = THREE.MathUtils.clamp(px, 0, window.innerWidth * 0.42);
+  // animate=true — комната «переезжает» плавно (режим любования: HUD скрылся →
+  // комната едет в центр; HUD вернулся → уезжает на своё место).
+  function setReservedLeft(px, animate = false) {
+    const clamped = THREE.MathUtils.clamp(px, 0, window.innerWidth * 0.42);
+    reservedTarget = clamped;
+    if (animate) {
+      animatingReserved = true; // дальше доезжает в updateCameraAnim()
+    } else {
+      reservedLeft = clamped;
+      animatingReserved = false;
+      applyZoom();
+    }
+    return clamped; // фактически применённая полоса (после ограничения)
+  }
+
+  // Кадровый шаг плавного «переезда» комнаты (вызывается из game.js).
+  // dt — секунды с прошлого кадра. Экспоненциальное сглаживание, не зависящее
+  // от частоты кадров. Возвращает true, пока комната ещё едет.
+  function updateCameraAnim(dt) {
+    if (!animatingReserved) return false;
+    const k = 1 - Math.pow(0.0009, Math.min(Math.max(dt, 0), 0.1));
+    reservedLeft += (reservedTarget - reservedLeft) * k;
+    if (Math.abs(reservedTarget - reservedLeft) < 0.5) {
+      reservedLeft = reservedTarget;
+      animatingReserved = false;
+    }
     applyZoom();
-    return reservedLeft; // фактически применённая полоса (после ограничения)
+    return animatingReserved;
   }
 
   // Меняет ручной зум: factor > 1 приближает, < 1 отдаляет
@@ -111,7 +137,7 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
   }
 
   applyZoom(); // стартовое вписывание пола в экран
-  return { camera, resize, zoomBy, setReservedLeft };
+  return { camera, resize, zoomBy, setReservedLeft, updateCameraAnim };
 }
 
 // Навешивает управление зумом на холст: колесо мыши + щипок двумя пальцами (pinch).

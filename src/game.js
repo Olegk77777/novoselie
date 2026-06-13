@@ -3,17 +3,17 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=46';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=46';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=46';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=46';
-import { createPlacement } from './placement.js?v=46';
-import { createUI } from './ui.js?v=46';
-import { renderItemIcon } from './icon.js?v=46';
-import { createPower } from './power.js?v=46';
-import { evaluateCombos } from './combos.js?v=46';
-import { isQuestDone } from './quests.js?v=46';
-import { createCat } from './cat.js?v=46';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=47';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=47';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=47';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=47';
+import { createPlacement } from './placement.js?v=47';
+import { createUI } from './ui.js?v=47';
+import { renderItemIcon } from './icon.js?v=47';
+import { createPower } from './power.js?v=47';
+import { evaluateCombos } from './combos.js?v=47';
+import { isQuestDone } from './quests.js?v=47';
+import { createCat } from './cat.js?v=47';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -60,7 +60,7 @@ async function init() {
   scene.background = new THREE.Color(0x1a1a2e); // холодные сумерки за окном
 
   // Изометрическая камера: сама вписывает комнату в экран
-  const { camera, resize: resizeCamera, zoomBy, setReservedLeft } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
+  const { camera, resize: resizeCamera, zoomBy, setReservedLeft, updateCameraAnim } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
 
   // Свет: тёплая "лампа" сверху + мягкая общая подсветка
   const lampLight = new THREE.DirectionalLight(0xffd9a0, 2.0);
@@ -423,6 +423,16 @@ async function init() {
     },
     onRotate: () => placement.rotate(),
     onReturn: () => placement.cancel(),
+    // Режим любования: интерфейс скрылся (CSS по body.cinema) — комната плавно
+    // переезжает в центр (полоса HUD больше не нужна). Вернулся — едет на место.
+    onCinema: (active) => {
+      if (active) {
+        setReservedLeft(0, true); // плавно в центр
+        document.documentElement.style.setProperty('--room-offset', '0px');
+      } else {
+        updateReservedLeft(true); // плавно вернуть на «рабочее» место
+      }
+    },
   });
   const placement = createPlacement({
     scene,
@@ -471,9 +481,11 @@ async function init() {
 
   // Левая полоса под HUD: меряем реальную ширину колонки #ui-left и сдвигаем
   // комнату вправо ровно на неё — плашки уюта/заданий больше не перекрывают комнату.
-  function updateReservedLeft() {
+  function updateReservedLeft(animate = false) {
+    // В режиме любования комната стоит по центру (полоса = 0) — ресайз её не возвращает.
+    if (document.body.classList.contains('cinema')) return;
     const leftEl = document.getElementById('ui-left');
-    const applied = setReservedLeft(leftEl ? leftEl.getBoundingClientRect().width + 28 : 0);
+    const applied = setReservedLeft(leftEl ? leftEl.getBoundingClientRect().width + 28 : 0, animate);
     // подсказку-тост сверху центрируем над КОМНАТОЙ (она сдвинута вправо на applied/2)
     document.documentElement.style.setProperty('--room-offset', applied / 2 + 'px');
   }
@@ -514,9 +526,13 @@ async function init() {
 
   // Главный цикл: перерисовываем сцену каждый кадр
   const clock = new THREE.Clock();
+  let lastTime = 0;
   renderer.setAnimationLoop(() => {
     placement.update(); // плавный доворот предмета «в руке»
     const time = clock.getElapsedTime();
+    const dt = time - lastTime; // секунд с прошлого кадра
+    lastTime = time;
+    updateCameraAnim(dt); // плавный «переезд» комнаты (режим любования)
     // Окно «живёт»: сутки за окном идут по кругу (день → закат → ночь → рассвет)
     if (windowGlass) windowGlass.uniforms.uTime.value = time;
     // Анимированные предметы (аквариум: вода, рыбки, пузырьки) — у кого есть tick

@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=46">
-  <link rel="stylesheet" href="design/type.css?v=46">
+  <link rel="stylesheet" href="design/colors.css?v=47">
+  <link rel="stylesheet" href="design/type.css?v=47">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -30,10 +30,11 @@
     /* --- Стеклянная пластина (база для HUD-элементов B) --- */
     /* используется в шкале уюта, кнопках, «Свернуть», модале */
 
-    /* Кнопки действий и сворачивания — в правом верхнем углу. */
+    /* Кнопки действий (поворот/убрать) — в правом верхнем углу, НИЖЕ кнопки
+       «Любование» (та сидит в самом углу), чтобы не накладывались. */
     #ui-top {
       position: fixed;
-      top: 14px;
+      top: 66px;
       right: 14px;
       display: flex;
       flex-direction: column;
@@ -41,6 +42,53 @@
       gap: 8px;
       z-index: 5;
     }
+
+    /* === Кнопка «Любование» — скрывает весь интерфейс ради комнаты === */
+    /* Стоит в правом верхнем углу: тонкая стеклянная плитка с амбер-глазом.
+       Отдельный fixed-элемент — остаётся видимой, когда HUD скрыт (можно вернуть). */
+    #ui-cinema {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 6;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      background: linear-gradient(160deg, var(--panel-glass), var(--panel-glass-2));
+      border: 1px solid var(--panel-stroke);
+      border-radius: var(--r-btn);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.4);
+      color: var(--amber);
+      cursor: pointer;
+      opacity: 0.8;
+      transition: opacity 0.45s ease, color 0.3s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    #ui-cinema svg { width: 24px; height: 24px; display: block; }
+    #ui-cinema:hover {
+      opacity: 1;
+      border-color: var(--amber);
+      box-shadow: 0 0 14px rgba(232, 185, 106, 0.3);
+    }
+    /* Глаз «горит» кремовым, когда мы в режиме любования */
+    #ui-cinema.watching { color: var(--text-cream); }
+
+    /* Плавное появление/исчезновение элементов HUD */
+    #ui-left, #ui-top, #ui-bottom, #ui-hint-toast {
+      transition: opacity 0.5s ease;
+    }
+    /* Режим любования: прячем весь HUD, оставляем лишь приглушённый глаз */
+    body.cinema #ui-left,
+    body.cinema #ui-top,
+    body.cinema #ui-bottom,
+    body.cinema #ui-hint-toast {
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.cinema #ui-cinema { opacity: 0.32; }
+    body.cinema #ui-cinema:hover { opacity: 1; }
     /* Низ — панель предметов по центру; «Свернуть» прижата влево. */
     #ui-bottom {
       position: fixed;
@@ -569,6 +617,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=46"></script>
+  <script type="module" src="src/game.js?v=47"></script>
 </body>
 </html>
