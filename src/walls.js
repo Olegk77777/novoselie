@@ -338,6 +338,18 @@ export function applyWindow(wallsGroup, cols, rows) {
           float swirl = 0.82 + 0.18 * sin(uv.x * 5.0 - t * 0.18 + uv.y * 4.0);
           col = mix(col, fogCol, fog * (0.34 + 0.55 * fy) * swirl);
 
+          // --- Редкие вспышки молнии во время сильного дождя ---
+          // Время бьётся на «слоты» ~6 c; в части слотов случается вспышка.
+          float strongRain = smoothstep(0.6, 0.95, rain);
+          float lt = t * 0.16;
+          float lseg = floor(lt);
+          float strike = step(0.82, hash1(lseg + 41.0));          // ~18% слотов — с молнией
+          float lph = fract(lt);
+          // Двойное мигание: резкий пик + дрожание + быстрый спад
+          float flash = strike * exp(-lph * 26.0) * (0.65 + 0.35 * sin(lph * 130.0)) * strongRain;
+          float skyHi = 0.45 + 0.6 * smoothstep(0.0, 0.7, uv.y);  // вверху неба ярче
+          col += vec3(0.72, 0.80, 1.0) * max(flash, 0.0) * skyHi * 0.82;
+
           // Косой блик на стекле (в ливень приглушаем, чтобы не спорил со струями)
           col += vec3(0.6,0.65,0.7) * smoothstep(0.02, 0.0, abs((uv.x - uv.y) + 0.18)) * 0.12 * (1.0 - rain * 0.5);
 

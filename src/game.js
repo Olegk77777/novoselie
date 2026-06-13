@@ -3,16 +3,16 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=36';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=36';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=36';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=36';
-import { createPlacement } from './placement.js?v=36';
-import { createUI } from './ui.js?v=36';
-import { renderItemIcon } from './icon.js?v=36';
-import { createPower } from './power.js?v=36';
-import { evaluateCombos } from './combos.js?v=36';
-import { isQuestDone } from './quests.js?v=36';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=37';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=37';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=37';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=37';
+import { createPlacement } from './placement.js?v=37';
+import { createUI } from './ui.js?v=37';
+import { renderItemIcon } from './icon.js?v=37';
+import { createPower } from './power.js?v=37';
+import { evaluateCombos } from './combos.js?v=37';
+import { isQuestDone } from './quests.js?v=37';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -413,8 +413,11 @@ async function init() {
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
     placement.update(); // плавный доворот предмета «в руке»
+    const time = clock.getElapsedTime();
     // Окно «живёт»: сутки за окном идут по кругу (день → закат → ночь → рассвет)
-    if (windowGlass) windowGlass.uniforms.uTime.value = clock.getElapsedTime();
+    if (windowGlass) windowGlass.uniforms.uTime.value = time;
+    // Анимированные предметы (аквариум: вода, рыбки, пузырьки) — у кого есть tick
+    scene.traverse((o) => { if (o.userData.tick) o.userData.tick(time); });
     renderer.render(scene, camera);
   });
 }

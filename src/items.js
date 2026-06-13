@@ -328,13 +328,139 @@ export function createTapePlayer() {
   return g;
 }
 
-// === Аквариум на тумбе 1×1 ===
+// === Аквариум на тумбе 1×1 (электроприбор) ===
+// Полностью кодом: ореховая тумба, стеклянная банка, АНИМИРОВАННАЯ вода (шейдер
+// с бегущими каустиками), плавающие рыбки, грунт, водоросли, камни, пузырьки.
+// Анимация — через userData.tick(t): game.js зовёт его каждый кадр (как у окна).
 export function createAquarium() {
   const g = new THREE.Group();
-  g.add(box(0.8, 0.5, 0.55, woodMaterial, 0, 0.25, 0));
-  g.add(box(0.72, 0.45, 0.42, lambert(COLORS.glass, { transparent: true, opacity: 0.35 }), 0, 0.73, 0));
-  g.add(box(0.66, 0.3, 0.36, lambert(COLORS.water, { transparent: true, opacity: 0.7 }), 0, 0.68, 0));
-  g.add(box(0.1, 0.06, 0.04, lambert(COLORS.fish), 0.1, 0.7, 0));
+
+  // --- Тумба под аквариум (орех) ---
+  g.add(box(0.84, 0.46, 0.6, walnutMaterial, 0, 0.23, 0));          // корпус
+  g.add(box(0.9, 0.05, 0.64, lambert(0x4a2e18), 0, 0.475, 0));      // крышка-карниз
+  g.add(box(0.66, 0.34, 0.02, lambert(0x7a4e26), 0, 0.22, 0.305));  // дверца
+  g.add(box(0.04, 0.1, 0.03, metalMaterial, 0.22, 0.22, 0.315));    // ручка
+
+  // Габариты банки (центр по высоте tankY)
+  const tankY = 0.74, tankW = 0.78, tankH = 0.48, tankD = 0.5;
+  const innerW = tankW - 0.06, innerD = tankD - 0.06;
+  const floorY = tankY - tankH / 2;                 // дно банки
+
+  // --- Грунт и камни на дне ---
+  g.add(box(innerW, 0.06, innerD, lambert(0x4a3a2c), 0, floorY + 0.03, 0));
+  g.add(box(0.12, 0.08, 0.1, lambert(0x6a6660), -0.18, floorY + 0.07, 0.05));
+  g.add(box(0.09, 0.06, 0.08, lambert(0x565250), 0.17, floorY + 0.06, -0.06));
+
+  // --- Вода: анимированный шейдер (бегущие каустики + блик у поверхности) ---
+  const waterTop = tankY + tankH / 2 - 0.05;        // поверхность чуть ниже верха
+  const waterBot = floorY + 0.06;                    // над грунтом
+  const waterMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+      varying vec3 vP;
+      void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+    `,
+    fragmentShader: `
+      precision mediump float;
+      uniform float uTime;
+      varying vec3 vP;
+      void main(){
+        float top = smoothstep(-0.18, 0.18, vP.y);          // светлее к поверхности
+        vec3 col = mix(vec3(0.05,0.20,0.24), vec3(0.13,0.39,0.42), top);
+        // каустики — две бегущие волны
+        float c = (sin(vP.x*16.0 + vP.y*7.0 + uTime*1.5)*0.5+0.5)
+                * (sin(vP.x*9.0 - vP.z*7.0 - uTime*1.1)*0.5+0.5);
+        col += vec3(0.16,0.26,0.24) * c * 0.7;
+        // блик у самой поверхности
+        float surf = smoothstep(0.12,0.18,vP.y) * (0.5+0.5*sin(vP.x*22.0+uTime*3.0));
+        col += vec3(0.5,0.7,0.68) * surf * 0.18;
+        gl_FragColor = vec4(col, 0.6);
+      }
+    `,
+  });
+  const water = new THREE.Mesh(new THREE.BoxGeometry(innerW, waterTop - waterBot, innerD), waterMat);
+  water.position.set(0, (waterTop + waterBot) / 2, 0);
+  water.renderOrder = 1;
+  g.add(water);
+
+  // --- Водоросли (качаются в tick) ---
+  const plantMat = lambert(0x3f6f3a);
+  const plants = [];
+  for (const [px, ph, pz] of [[-0.22, 0.26, 0.07], [-0.12, 0.34, -0.08], [0.2, 0.3, 0.09], [0.27, 0.22, -0.05]]) {
+    const blade = box(0.05, ph, 0.05, plantMat, px, floorY + 0.06 + ph / 2, pz);
+    blade.userData.bx = px;
+    plants.push(blade);
+    g.add(blade);
+  }
+
+  // --- Рыбки (тело + хвост + плавник; плавают в tick) ---
+  const fishOrange = lambert(0xd9762e, { emissive: 0x331403 });
+  const fishPale = lambert(0xc9b85a, { emissive: 0x2a2408 });
+  const fishes = [];
+  function makeFish(mat) {
+    const f = new THREE.Group();
+    f.add(box(0.14, 0.08, 0.05, mat, 0, 0, 0));        // тело
+    const tail = box(0.06, 0.07, 0.03, mat, -0.1, 0, 0); // хвост
+    f.add(tail);
+    f.add(box(0.05, 0.05, 0.04, mat, 0.02, 0.06, 0));  // верхний плавник
+    f.userData.tail = tail;
+    return f;
+  }
+  for (const p of [
+    { mat: fishOrange, speed: 0.7, phase: 0.0, xr: 0.26, y: 0.74, z: 0.06, by: 0.03 },
+    { mat: fishOrange, speed: 0.5, phase: 2.1, xr: 0.22, y: 0.66, z: -0.08, by: 0.04 },
+    { mat: fishPale, speed: 0.95, phase: 4.0, xr: 0.2, y: 0.81, z: 0.0, by: 0.02 },
+  ]) {
+    const f = makeFish(p.mat);
+    f.userData.p = p;
+    fishes.push(f);
+    g.add(f);
+  }
+
+  // --- Пузырьки (поднимаются и сбрасываются в tick) ---
+  const bubbleMat = lambert(0xcfe8ee, { transparent: true, opacity: 0.5, depthWrite: false });
+  const bubbles = [];
+  for (let i = 0; i < 4; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.012 + i * 0.003, 6, 6), bubbleMat);
+    b.userData.off = i / 4;
+    b.renderOrder = 2;
+    bubbles.push(b);
+    g.add(b);
+  }
+
+  // --- Стеклянная банка + рамка + крышка-светильник (поверх воды) ---
+  g.add(box(tankW + 0.02, 0.03, tankD + 0.02, lambert(0x2a2a30), 0, tankY + tankH / 2, 0)); // верхний кант
+  g.add(box(tankW + 0.02, 0.04, tankD + 0.02, lambert(0x2a2a30), 0, tankY - tankH / 2, 0)); // нижний кант
+  g.add(box(tankW, 0.04, tankD, lambert(0x33333a), 0, tankY + tankH / 2 + 0.03, 0));        // крышка
+  g.add(box(tankW - 0.08, 0.015, tankD - 0.08, lambert(0xffe8b0, { emissive: 0xffcf80 }), 0, tankY + tankH / 2 + 0.005, 0)); // лампа под крышкой
+  const glass = new THREE.Mesh(
+    new THREE.BoxGeometry(tankW, tankH, tankD),
+    lambert(COLORS.glass, { transparent: true, opacity: 0.16, depthWrite: false })
+  );
+  glass.position.set(0, tankY, 0);
+  glass.renderOrder = 3;
+  g.add(glass);
+
+  // --- Анимация: game.js зовёт tick(t) каждый кадр ---
+  g.userData.tick = (t) => {
+    waterMat.uniforms.uTime.value = t;
+    for (const f of fishes) {
+      const p = f.userData.p;
+      const arg = t * p.speed + p.phase;
+      f.position.set(Math.sin(arg) * p.xr, p.y + Math.sin(arg * 1.3) * p.by, p.z);
+      f.rotation.y = Math.cos(arg) >= 0 ? 0 : Math.PI;        // разворот по ходу
+      f.userData.tail.rotation.y = Math.sin(t * 8.0 + p.phase) * 0.5; // виляет хвостом
+    }
+    for (const bl of plants) bl.rotation.z = Math.sin(t * 1.2 + bl.userData.bx * 5.0) * 0.12;
+    for (const b of bubbles) {
+      const u = (t * 0.3 + b.userData.off) % 1.0;
+      b.position.set(0.24 + Math.sin(u * 6.28 + b.userData.off * 6.0) * 0.015, waterBot + u * (waterTop - waterBot), -0.1);
+      b.visible = u < 0.95;
+    }
+  };
+
   return g;
 }
 
