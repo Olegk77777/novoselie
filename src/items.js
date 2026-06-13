@@ -39,6 +39,8 @@ const rugPatternMaterial = texturedMaterial('textures/rug_pattern.jpg', 0xb05a40
 const fabricMaterial = texturedMaterial('textures/fabric_green.jpg', 0x8a875a, 'обивка');
 const blanketMaterial = texturedMaterial('textures/bedspread_pattern.jpg', 0x7a3a2e, 'плед');
 const linenMaterial = texturedMaterial('textures/bed_linen.jpg', 0xe6dfca, 'постель');
+// Бетон — для обломков строительного мусора (та же текстура, что на голых стенах)
+const concreteMaterial = texturedMaterial('textures/concrete_bare.jpg', 0x9a968e, 'бетон');
 
 // Палитра остальных материалов (советские приглушённые тона)
 const COLORS = {
@@ -79,6 +81,8 @@ function cyl(radius, h, material, x, y, z, rx = 0, rz = 0) {
   mesh.rotation.z = rz;
   return mesh;
 }
+// Поворот меша вокруг вертикальной оси (для наваленных обломков мусора)
+const rotY = (mesh, a) => { mesh.rotation.y = a; return mesh; };
 
 // === Табурет 1×1: сиденье + 4 ножки ===
 export function createStool() {
@@ -345,6 +349,56 @@ export function createFlowerPot() {
   return g;
 }
 
+// === Куча строительного мусора: обломки бетона, кирпичи, доска ===
+function createRubblePile() {
+  const g = new THREE.Group();
+  const brick = lambert(0x9a4a38);
+  g.add(box(0.6, 0.03, 0.5, concreteMaterial, 0, 0.015, 0)); // россыпь/пыль у основания
+  // Обломки бетона навалены
+  g.add(rotY(box(0.3, 0.2, 0.26, concreteMaterial, -0.05, 0.1, 0.02), 0.2));
+  g.add(rotY(box(0.24, 0.16, 0.2, concreteMaterial, 0.18, 0.08, 0.08), -0.4));
+  g.add(rotY(box(0.2, 0.14, 0.17, concreteMaterial, -0.16, 0.07, -0.12), 0.6));
+  g.add(rotY(box(0.17, 0.12, 0.14, concreteMaterial, 0.04, 0.22, 0.0), 0.3));
+  // Кирпичи
+  g.add(rotY(box(0.24, 0.1, 0.11, brick, -0.22, 0.05, 0.16), 0.5));
+  g.add(rotY(box(0.24, 0.1, 0.11, brick, -0.16, 0.15, 0.13), 0.2));
+  // Доска под углом
+  g.add(rotY(box(0.55, 0.04, 0.1, woodMaterial, 0.12, 0.04, -0.2), -0.3));
+  return g;
+}
+
+// Поле мусора: несколько куч по углам и у стен. Каждая куча помечена
+// userData.debrisPile — по ней игрок кликает, чтобы убрать (game.js).
+export function createDebrisField() {
+  const g = new THREE.Group();
+  const spots = [
+    [-4.3, -3.3, 0.3], [-1.0, -3.4, 1.2], [3.0, -3.3, -0.5],
+    [-4.4, 0.5, 0.8], [-4.2, 2.8, 2.0], [2.2, 1.4, -0.8],
+  ];
+  for (const [x, z, ry] of spots) {
+    const pile = createRubblePile();
+    pile.position.set(x, 0, z);
+    pile.rotation.y = ry;
+    pile.userData.debrisPile = true;
+    g.add(pile);
+  }
+  return g;
+}
+
+// === Иконка «Вставить окно» (в комнату не ставится — применяется кликом) ===
+export function createRenoWindow() {
+  const g = new THREE.Group();
+  g.add(box(0.46, 0.5, 0.04, lambert(0x42547a), 0, 0.42, 0)); // стекло
+  const fr = lambert(0xe2ddd0);
+  g.add(box(0.56, 0.06, 0.06, fr, 0, 0.17, 0.01));   // низ рамы
+  g.add(box(0.56, 0.06, 0.06, fr, 0, 0.67, 0.01));   // верх рамы
+  g.add(box(0.06, 0.56, 0.06, fr, -0.27, 0.42, 0.01)); // левый брус
+  g.add(box(0.06, 0.56, 0.06, fr, 0.27, 0.42, 0.01));  // правый брус
+  g.add(box(0.04, 0.5, 0.05, fr, 0, 0.42, 0.02));    // переплёт вертикальный
+  g.add(box(0.46, 0.04, 0.05, fr, 0, 0.42, 0.02));   // переплёт горизонтальный
+  return g;
+}
+
 // Реестр моделей: ключ — поле "model" из data/items.json.
 // Новый предмет = запись в JSON + (если нужна новая форма) функция здесь.
 export const MODEL_BUILDERS = {
@@ -364,4 +418,5 @@ export const MODEL_BUILDERS = {
   outlet: createOutlet,
   reno_parquet: createRenoParquet,
   reno_wallpaper: createRenoWallpaper,
+  reno_window: createRenoWindow,
 };

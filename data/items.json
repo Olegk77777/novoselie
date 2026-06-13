@@ -1,6 +1,7 @@
 {
   "_comment": "Предметы игры. Поля: id — ключ (имя берётся из locales/<lang>.json по ключу items.<id>), model — функция-строитель из src/items.js, size — [ширина, глубина] в клетках, comfort — очки уюта, placement — floor|wall|reno (reno — ремонт: применяется кликом, не ставится), applies — для reno: floor|walls, layer — rug для ковров (мебель можно ставить поверх), count — сколько штук, surfaceHeight — высота столешницы (на предмет можно ставить mountable-предметы), mountable — ставится на поверхности, fixedWallHeight — настенный предмет висит только на этой высоте (розетка у пола), sockets — сколько приборов можно включить в розетку, cordLength — длина шнура прибора в клетках (прибор работает, если дотягивается до розетки со свободным гнездом).",
   "items": [
+    { "id": "reno_window", "model": "reno_window", "placement": "reno", "applies": "window", "comfort": 5, "count": 1 },
     { "id": "reno_parquet", "model": "reno_parquet", "placement": "reno", "applies": "floor", "comfort": 5, "count": 1 },
     { "id": "reno_wallpaper", "model": "reno_wallpaper", "placement": "reno", "applies": "walls", "comfort": 5, "count": 1 },
     { "id": "outlet", "model": "outlet", "size": [1, 1], "comfort": 1, "placement": "wall", "count": 2, "fixedWallHeight": 0.3, "sockets": 2 },

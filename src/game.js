@@ -3,16 +3,16 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=27';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper } from './walls.js?v=27';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=27';
-import { MODEL_BUILDERS } from './items.js?v=27';
-import { createPlacement } from './placement.js?v=27';
-import { createUI } from './ui.js?v=27';
-import { renderItemIcon } from './icon.js?v=27';
-import { createPower } from './power.js?v=27';
-import { evaluateCombos } from './combos.js?v=27';
-import { isQuestDone } from './quests.js?v=27';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=28';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=28';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=28';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=28';
+import { createPlacement } from './placement.js?v=28';
+import { createUI } from './ui.js?v=28';
+import { renderItemIcon } from './icon.js?v=28';
+import { createPower } from './power.js?v=28';
+import { evaluateCombos } from './combos.js?v=28';
+import { isQuestDone } from './quests.js?v=28';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -115,8 +115,11 @@ async function init() {
   // Очки уюта предмета по id (для подсчёта максимума с наградами квестов)
   const comfortOf = (id) => records.find((r) => r.id === id)?.comfort || 0;
 
-  // Максимум уюта = предметы + бонусы + награды квестов (очки и предметы)
+  // Уборка строительного мусора даёт уют (не предмет — отдельная константа)
+  const DEBRIS_COMFORT = 5;
+  // Максимум уюта = уборка мусора + предметы + бонусы + награды квестов
   const maxComfort =
+    DEBRIS_COMFORT +
     records.reduce((sum, r) => sum + (r.comfort || 0) * (r.count ?? 1), 0) +
     comboDefs.reduce((sum, c) => sum + c.bonus, 0) +
     questDefs.reduce(
@@ -198,11 +201,22 @@ async function init() {
     refreshComfort();
   }
 
-  // === Ремонт: пока не уложен паркет и не поклеены обои, мебель заблокирована ===
+  // === Ремонт по шагам: мусор → окно → паркет → обои → мебель ===
   const furnitureIds = records.filter((r) => r.placement !== 'reno').map((r) => r.id);
-  const renoDone = { floor: false, walls: false };
+  const renoDone = { debris: false, window: false, floor: false, walls: false };
 
   function applyReno(def) {
+    // Окно: вставляем стекло, открываем паркет и обои
+    if (def.applies === 'window') {
+      applyWindow(walls, GRID_COLS, GRID_ROWS);
+      renoDone.window = true;
+      renoComfort += def.comfort || 0;
+      ui.changeCount(def.id, -1);
+      ui.setLocked(['reno_parquet', 'reno_wallpaper'], false);
+      refreshComfort();
+      ui.showHint(t(locale, 'ui.hint_reno_after_window'));
+      return;
+    }
     if (def.applies === 'floor') {
       applyParquet(floor, GRID_COLS, GRID_ROWS);
       renoDone.floor = true;
@@ -222,6 +236,37 @@ async function init() {
       );
     }
   }
+
+  // Строительный мусор: кучи по комнате, убираются кликом (первый шаг ремонта)
+  const debrisField = createDebrisField();
+  scene.add(debrisField);
+  let debrisLeft = debrisField.children.length;
+  const debrisRay = new THREE.Raycaster();
+
+  function removeDebrisAt(event) {
+    if (renoDone.debris) return; // мусор уже убран
+    const rect = renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    debrisRay.setFromCamera(ndc, camera);
+    const hits = debrisRay.intersectObjects(debrisField.children, true);
+    if (!hits.length) return;
+    let pile = hits[0].object;
+    while (pile && !pile.userData.debrisPile) pile = pile.parent;
+    if (!pile) return;
+    debrisField.remove(pile);
+    debrisLeft -= 1;
+    if (debrisLeft <= 0) {
+      renoDone.debris = true;
+      renoComfort += DEBRIS_COMFORT;
+      refreshComfort();
+      ui.setLocked(['reno_window'], false); // открываем «вставить окно»
+      ui.showHint(t(locale, 'ui.hint_reno_window'));
+    }
+  }
+  renderer.domElement.addEventListener('pointerdown', removeDebrisAt);
 
   // Панель предметов и контроллер расстановки
   const ui = createUI({
@@ -277,10 +322,11 @@ async function init() {
     },
   });
 
-  // Стартовое состояние: голая комната, мебель под замком, подсказка про ремонт
+  // Стартовое состояние: грязная комната. Заблокировано всё, кроме уборки мусора —
+  // окно, паркет и обои откроются по ходу. Первая подсказка — про мусор.
   ui.setState('inSlot');
-  ui.setLocked(furnitureIds, true);
-  ui.showHint(t(locale, 'ui.hint_reno_start'));
+  ui.setLocked([...furnitureIds, 'reno_window', 'reno_parquet', 'reno_wallpaper'], true);
+  ui.showHint(t(locale, 'ui.hint_reno_debris'));
   refreshQuestsUI();
   refreshComfort();
 

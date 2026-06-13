@@ -96,13 +96,8 @@ export function createWalls(cols, rows) {
     (WINDOW.from + WINDOW.to) / 2, (WINDOW.top + WALL_HEIGHT) / 2, backZ,
     WINDOW.to - WINDOW.from, WALL_HEIGHT - WINDOW.top
   );
-  // "Стекло": холодные сумерки за окном. MeshBasic не зависит от света — как будто светится.
-  const pane = new THREE.Mesh(
-    new THREE.BoxGeometry(WINDOW.to - WINDOW.from, WINDOW.top - WINDOW.bottom, THICKNESS / 4),
-    new THREE.MeshBasicMaterial({ color: 0x4a5a8a })
-  );
-  pane.position.set((WINDOW.from + WINDOW.to) / 2, (WINDOW.bottom + WINDOW.top) / 2, backZ);
-  group.add(pane);
+  // На старте окна нет — пустой проём (видно тёмный «провал» наружу).
+  // Стекло вставляется при ремонте (applyWindow), до укладки паркета.
 
   // === Левая стена (вдоль Z, у края x = -halfW), с дверным проёмом ===
   const leftX = -halfW - THICKNESS / 2;
@@ -154,6 +149,67 @@ function applyConcrete(wallsGroup) {
     undefined,
     () => {} // нет текстуры — остаётся серый CONCRETE_COLOR (стартовый материал)
   );
+}
+
+// Вставляет окно: стекло (шейдер — вечернее небо, луна, косые блики) + белая
+// рама с переплётом. Вызывается при ремонте (до паркета). Добавляет всё в группу стен.
+export function applyWindow(wallsGroup, cols, rows) {
+  const backZ = -rows / 2 - THICKNESS / 2;
+  const cx = (WINDOW.from + WINDOW.to) / 2;
+  const cy = (WINDOW.bottom + WINDOW.top) / 2;
+  const w = WINDOW.to - WINDOW.from;
+  const h = WINDOW.top - WINDOW.bottom;
+
+  // Стекло — ShaderMaterial: сумеречное небо за окном, луна и блики на стекле
+  const glass = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.ShaderMaterial({
+      transparent: true,
+      vertexShader: `
+        varying vec2 vUv;
+        void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        void main() {
+          // Сумеречное небо: тёплый горизонт снизу → холодный зенит сверху
+          vec3 zenith  = vec3(0.06, 0.07, 0.17);
+          vec3 horizon = vec3(0.34, 0.26, 0.33);
+          vec3 sky = mix(horizon, zenith, smoothstep(0.0, 1.0, vUv.y));
+          // Луна — мягкое свечение и диск в правом верхнем углу
+          vec2 moon = vec2(0.74, 0.76);
+          float d = distance(vUv, moon);
+          sky += vec3(0.85, 0.86, 0.78) * smoothstep(0.22, 0.0, d) * 0.45;
+          sky = mix(sky, vec3(0.96, 0.95, 0.86), smoothstep(0.055, 0.04, d));
+          // Косые блики на стекле — две светлые диагональные полосы
+          float diag = vUv.x - vUv.y;
+          float streak = smoothstep(0.025, 0.0, abs(diag + 0.12))
+                       + smoothstep(0.04, 0.0, abs(diag - 0.05)) * 0.5;
+          sky += vec3(0.55, 0.6, 0.66) * streak * 0.3;
+          gl_FragColor = vec4(sky, 0.9);
+        }
+      `,
+    })
+  );
+  glass.position.set(cx, cy, backZ + 0.02);
+  glass.userData.windowGlass = true;
+  wallsGroup.add(glass);
+
+  // Белая крашеная рама + переплёт-крестовина
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0xe2ddd0 });
+  const fz = backZ + 0.05;
+  const bar = (bw, bh, x, y) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.1), frameMat);
+    m.position.set(x, y, fz);
+    m.userData.windowGlass = true;
+    wallsGroup.add(m);
+  };
+  bar(0.08, h + 0.16, WINDOW.from - 0.04, cy); // левый брус
+  bar(0.08, h + 0.16, WINDOW.to + 0.04, cy);   // правый брус
+  bar(w + 0.16, 0.08, cx, WINDOW.bottom - 0.04); // низ
+  bar(w + 0.16, 0.08, cx, WINDOW.top + 0.04);    // верх
+  bar(0.06, h, cx, cy); // вертикальная перекладина переплёта
+  bar(w, 0.06, cx, cy); // горизонтальная перекладина переплёта
 }
 
 // Клеит обои на стены (вызывается при ремонте из game.js).
