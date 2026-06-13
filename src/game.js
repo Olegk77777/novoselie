@@ -3,17 +3,17 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=45';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=45';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=45';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=45';
-import { createPlacement } from './placement.js?v=45';
-import { createUI } from './ui.js?v=45';
-import { renderItemIcon } from './icon.js?v=45';
-import { createPower } from './power.js?v=45';
-import { evaluateCombos } from './combos.js?v=45';
-import { isQuestDone } from './quests.js?v=45';
-import { createCat } from './cat.js?v=45';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=46';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=46';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=46';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=46';
+import { createPlacement } from './placement.js?v=46';
+import { createUI } from './ui.js?v=46';
+import { renderItemIcon } from './icon.js?v=46';
+import { createPower } from './power.js?v=46';
+import { evaluateCombos } from './combos.js?v=46';
+import { isQuestDone } from './quests.js?v=46';
+import { createCat } from './cat.js?v=46';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -278,13 +278,29 @@ async function init() {
   // (occupant) клеток пола не держат (нет keys), поэтому в карту не попадают.
   let obstacleKeys = new Set();
 
+  // Удлинитель — бонус за «электрификацию»: открывается, когда ВСЕ приборы хоть
+  // раз были подключены к розетке (чтобы сложнее было). До тех пор заблокирован.
+  const EXTENSION_ID = 'extension_cord';
+  const electricalIds = records.filter((r) => r.cordLength).map((r) => r.id);
+  const everConnected = new Set(); // id приборов, которые хоть раз были под током
+  let extensionUnlocked = false;
+
   function recompute(placedItems) {
     lastLayout = placedItems;
     lastConnections = power.update(placedItems);
-    // Экранные приборы (ТВ, магнитофон) включаются только при наличии тока —
-    // прокидываем питание в их модели; userData.tick читает это и гасит экран без розетки.
+    // Приборы (ТВ, магнитофон, аквариум) работают только при наличии тока —
+    // прокидываем питание в их модели; userData.tick читает это и гасит их без розетки.
     for (const it of placedItems) {
-      if (it.userData.def.cordLength) it.userData.powered = lastConnections.has(it);
+      if (!it.userData.def.cordLength) continue;
+      const powered = lastConnections.has(it);
+      it.userData.powered = powered;
+      if (powered) everConnected.add(it.userData.def.id); // запоминаем «был под током»
+    }
+    // Все приборы хоть раз запитаны → открываем удлинитель (бонус за электрификацию)
+    if (!extensionUnlocked && electricalIds.length && electricalIds.every((id) => everConnected.has(id))) {
+      extensionUnlocked = true;
+      ui.setLocked([EXTENSION_ID], false);
+      ui.showModal(t(locale, 'ui.extension_unlocked_text'), t(locale, 'ui.extension_unlocked_kicker'));
     }
     comboResults = evaluateCombos(comboDefs, placedItems, lastConnections);
     obstacleKeys = new Set();
@@ -298,6 +314,8 @@ async function init() {
 
   // === Ремонт по шагам: мусор → окно → паркет → обои → мебель ===
   const furnitureIds = records.filter((r) => r.placement !== 'reno').map((r) => r.id);
+  // Удлинитель открывается не вместе с мебелью, а отдельно — после электрификации
+  const unlockAfterReno = furnitureIds.filter((id) => id !== EXTENSION_ID);
   const renoDone = { debris: false, window: false, floor: false, walls: false };
 
   // Этапы ремонта — тоже задания (показываются в журнале + модал при выполнении).
@@ -347,7 +365,7 @@ async function init() {
     refreshComfort();
     completeRenoStep(def.applies === 'floor' ? 'floor' : 'walls'); // модал + журнал
     if (renoDone.floor && renoDone.walls) {
-      ui.setLocked(furnitureIds, false); // ремонт готов — мебель доступна
+      ui.setLocked(unlockAfterReno, false); // ремонт готов — мебель доступна (кроме удлинителя)
       ui.showHint(t(locale, 'ui.hint_reno_done'));
     } else {
       ui.showHint(

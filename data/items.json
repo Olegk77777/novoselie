@@ -5,6 +5,7 @@
     { "id": "reno_parquet", "model": "reno_parquet", "placement": "reno", "applies": "floor", "comfort": 5, "count": 1 },
     { "id": "reno_wallpaper", "model": "reno_wallpaper", "placement": "reno", "applies": "walls", "comfort": 5, "count": 1 },
     { "id": "outlet", "model": "outlet", "size": [1, 1], "comfort": 1, "placement": "wall", "count": 2, "fixedWallHeight": 0.3, "sockets": 2 },
+    { "id": "extension_cord", "model": "extension_cord", "size": [1, 1], "comfort": 2, "placement": "floor", "count": 1, "sockets": 3 },
     { "id": "bed", "model": "bed", "size": [1, 2], "comfort": 10, "placement": "floor", "count": 1 },
     { "id": "cupboard", "model": "cupboard", "size": [3, 1], "comfort": 12, "placement": "floor", "count": 1 },
     { "id": "table", "model": "table", "size": [2, 1], "comfort": 6, "placement": "floor", "count": 1, "surfaceHeight": 0.78 },

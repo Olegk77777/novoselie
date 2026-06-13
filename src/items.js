@@ -1138,6 +1138,29 @@ export function createOutlet() {
   return g;
 }
 
+// === Удлинитель 1×1 (напольная розетка-колодка): ставится на пол куда угодно ===
+// Электроприбор-наоборот: сам даёт гнёзда (sockets), к нему тянутся приборы.
+// Бонус за «электрификацию» — открывается, когда все приборы хоть раз подключены.
+export function createExtensionCord() {
+  const g = new THREE.Group();
+  const body = lambert(0xd8d0bc);   // пожелтевший белый пластик
+  const dark = lambert(0x2a2a30);
+  // Колодка
+  g.add(box(0.5, 0.06, 0.18, body, 0, 0.04, 0));
+  // Гнёзда сверху (три тёмных углубления с парой контактов)
+  for (const x of [-0.15, 0, 0.15]) {
+    g.add(box(0.11, 0.012, 0.11, dark, x, 0.072, 0));
+    g.add(box(0.012, 0.014, 0.012, body, x - 0.025, 0.076, 0));
+    g.add(box(0.012, 0.014, 0.012, body, x + 0.025, 0.076, 0));
+  }
+  // Кнопка-выключатель с красным огоньком на торце
+  g.add(box(0.06, 0.03, 0.06, lambert(0xc23a2a, { emissive: 0x401008 }), -0.22, 0.05, 0.05));
+  // Шнур-«хвост» уходит в сторону и лежит на полу (тонкий тёмный)
+  g.add(box(0.26, 0.02, 0.025, dark, 0.36, 0.01, 0.06));
+  g.add(box(0.025, 0.02, 0.18, dark, 0.48, 0.01, 0.14));
+  return g;
+}
+
 // === Иконки ремонта (в комнату не ставятся — применяются кликом) ===
 // Паркет: плашка дерева
 export function createRenoParquet() {
@@ -1242,7 +1265,7 @@ export function createAquarium() {
   const waterMat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    uniforms: { uTime: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uOn: { value: 1 } },
     vertexShader: `
       varying vec3 vP;
       void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
@@ -1250,6 +1273,7 @@ export function createAquarium() {
     fragmentShader: `
       precision mediump float;
       uniform float uTime;
+      uniform float uOn;      // 1 — есть ток (подсветка/компрессор), 0 — тёмная стоячая вода
       varying vec3 vP;
       void main(){
         float top = smoothstep(-0.18, 0.18, vP.y);          // светлее к поверхности
@@ -1261,7 +1285,7 @@ export function createAquarium() {
         // блик у самой поверхности
         float surf = smoothstep(0.12,0.18,vP.y) * (0.5+0.5*sin(vP.x*22.0+uTime*3.0));
         col += vec3(0.5,0.7,0.68) * surf * 0.18;
-        gl_FragColor = vec4(col, 0.6);
+        gl_FragColor = vec4(col * mix(0.28, 1.0, uOn), 0.6); // без тока вода тускнеет
       }
     `,
   });
@@ -1319,7 +1343,8 @@ export function createAquarium() {
   g.add(box(tankW + 0.02, 0.03, tankD + 0.02, lambert(0x2a2a30), 0, tankY + tankH / 2, 0)); // верхний кант
   g.add(box(tankW + 0.02, 0.04, tankD + 0.02, lambert(0x2a2a30), 0, tankY - tankH / 2, 0)); // нижний кант
   g.add(box(tankW, 0.04, tankD, lambert(0x33333a), 0, tankY + tankH / 2 + 0.03, 0));        // крышка
-  g.add(box(tankW - 0.08, 0.015, tankD - 0.08, lambert(0xffe8b0, { emissive: 0xffcf80 }), 0, tankY + tankH / 2 + 0.005, 0)); // лампа под крышкой
+  const lampMat = lambert(0xffe8b0, { emissive: 0xffcf80 });
+  g.add(box(tankW - 0.08, 0.015, tankD - 0.08, lampMat, 0, tankY + tankH / 2 + 0.005, 0)); // лампа под крышкой (гаснет без тока)
   const glass = new THREE.Mesh(
     new THREE.BoxGeometry(tankW, tankH, tankD),
     lambert(COLORS.glass, { transparent: true, opacity: 0.16, depthWrite: false })
@@ -1329,20 +1354,31 @@ export function createAquarium() {
   g.add(glass);
 
   // --- Анимация: game.js зовёт tick(t) каждый кадр ---
+  // Аквариум — электроприбор: компрессор и подсветка работают только при токе.
+  // Без розетки он «тёмный и неподвижный»: копим время только под током (рыбки,
+  // вода и водоросли замирают), свет гаснет, вода тускнеет, пузырьки пропадают.
+  let animT = 0, lastT = null;
   g.userData.tick = (t) => {
-    waterMat.uniforms.uTime.value = t;
+    const on = !!g.userData.powered;
+    if (lastT === null) lastT = t;
+    if (on) animT += t - lastT; // время идёт, только пока есть ток
+    lastT = t;
+    const tt = animT;
+    waterMat.uniforms.uTime.value = tt;
+    waterMat.uniforms.uOn.value = on ? 1.0 : 0.0;
+    lampMat.emissive.setHex(on ? 0xffcf80 : 0x080808); // подсветка под крышкой гаснет
     for (const f of fishes) {
       const p = f.userData.p;
-      const arg = t * p.speed + p.phase;
+      const arg = tt * p.speed + p.phase;
       f.position.set(Math.sin(arg) * p.xr, p.y + Math.sin(arg * 1.3) * p.by, p.z);
       f.rotation.y = Math.cos(arg) >= 0 ? 0 : Math.PI;        // разворот по ходу
-      f.userData.tail.rotation.y = Math.sin(t * 8.0 + p.phase) * 0.5; // виляет хвостом
+      f.userData.tail.rotation.y = Math.sin(tt * 8.0 + p.phase) * 0.5; // виляет хвостом
     }
-    for (const bl of plants) bl.rotation.z = Math.sin(t * 1.2 + bl.userData.bx * 5.0) * 0.12;
+    for (const bl of plants) bl.rotation.z = Math.sin(tt * 1.2 + bl.userData.bx * 5.0) * 0.12;
     for (const b of bubbles) {
-      const u = (t * 0.3 + b.userData.off) % 1.0;
+      const u = (tt * 0.3 + b.userData.off) % 1.0;
       b.position.set(0.24 + Math.sin(u * 6.28 + b.userData.off * 6.0) * 0.015, waterBot + u * (waterTop - waterBot), -0.1);
-      b.visible = u < 0.95;
+      b.visible = on && u < 0.95; // без компрессора пузырьков нет
     }
   };
 
@@ -1428,6 +1464,7 @@ export const MODEL_BUILDERS = {
   aquarium: createAquarium,
   flower_pot: createFlowerPot,
   outlet: createOutlet,
+  extension_cord: createExtensionCord,
   reno_parquet: createRenoParquet,
   reno_wallpaper: createRenoWallpaper,
   reno_window: createRenoWindow,
