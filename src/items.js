@@ -35,6 +35,10 @@ const plasticMaterial = texturedMaterial('textures/plastic_dark.jpg', 0x35353c, 
 const metalMaterial = texturedMaterial('textures/metal_brushed.jpg', 0x8a8c94, 'металл');
 // Узор ковра: маппится на верх ковра один-в-один (не повторяется)
 const rugPatternMaterial = texturedMaterial('textures/rug_pattern.jpg', 0xb05a40, 'узор ковра');
+// Ткани: обивка кресла (оливковая рогожка), плед-одеяло, постельный тик
+const fabricMaterial = texturedMaterial('textures/fabric_green.jpg', 0x8a875a, 'обивка');
+const blanketMaterial = texturedMaterial('textures/bedspread_pattern.jpg', 0x7a3a2e, 'плед');
+const linenMaterial = texturedMaterial('textures/bed_linen.jpg', 0xe6dfca, 'постель');
 
 // Палитра остальных материалов (советские приглушённые тона)
 const COLORS = {
@@ -79,23 +83,23 @@ export function createStool() {
 // === Кровать 1×2: рама, матрас, подушка, одеяло, спинка ===
 export function createBed() {
   const g = new THREE.Group();
-  g.add(box(0.92, 0.3, 1.92, woodMaterial, 0, 0.15, 0));
-  g.add(box(0.84, 0.14, 1.8, lambert(COLORS.mattress), 0, 0.37, 0));
-  g.add(box(0.6, 0.1, 0.4, lambert(COLORS.pillow), 0, 0.49, -0.65));
-  g.add(box(0.86, 0.07, 1.0, lambert(COLORS.blanket), 0, 0.47, 0.4));
-  g.add(box(0.92, 0.45, 0.07, woodMaterial, 0, 0.5, -0.93));
+  g.add(box(0.92, 0.3, 1.92, woodMaterial, 0, 0.15, 0));          // рама
+  g.add(box(0.84, 0.14, 1.8, linenMaterial, 0, 0.37, 0));         // матрас — тик
+  g.add(box(0.6, 0.1, 0.4, linenMaterial, 0, 0.49, -0.65));       // подушка — тик
+  g.add(box(0.86, 0.07, 1.0, blanketMaterial, 0, 0.47, 0.4));     // одеяло — плед
+  g.add(box(0.92, 0.45, 0.07, woodMaterial, 0, 0.5, -0.93));      // спинка
   return g;
 }
 
 // === Кресло 1×1: база, спинка, подлокотники, подушка ===
 export function createArmchair() {
   const g = new THREE.Group();
-  const fabric = lambert(COLORS.fabric);
+  const fabric = fabricMaterial; // оливковая рогожка
   g.add(box(0.8, 0.34, 0.8, fabric, 0, 0.17, 0));
   g.add(box(0.8, 0.52, 0.2, fabric, 0, 0.6, -0.3));
   g.add(box(0.18, 0.26, 0.62, fabric, -0.31, 0.47, 0.05));
   g.add(box(0.18, 0.26, 0.62, fabric, 0.31, 0.47, 0.05));
-  g.add(box(0.44, 0.1, 0.5, lambert(COLORS.cushion), 0, 0.39, 0.05));
+  g.add(box(0.44, 0.1, 0.5, fabric, 0, 0.39, 0.05)); // подушка — та же обивка
   return g;
 }
 

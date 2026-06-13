@@ -10,6 +10,8 @@ const THICKNESS = 0.2; // толщина стен
 const CONCRETE_COLOR = 0x8f8f88; // голая штукатурка — старт до ремонта
 // Один "лист" текстуры обоев покрывает квадрат 2×2 юнита
 const WALLPAPER_TILE = 2;
+// Один "лист" бетона крупнее (2.5×2.5), чтобы не бросался в глаза повтор
+const CONCRETE_TILE = 2.5;
 
 // Окно в дальней стене (z = -rows/2): границы по X и по высоте
 const WINDOW = { from: -1.5, to: 1.5, bottom: 0.8, top: 2.1 };
@@ -125,7 +127,33 @@ export function createWalls(cols, rows) {
     DOOR.to - DOOR.from, WALL_HEIGHT - DOOR.top
   );
 
+  // Одеваем голые стены в бетон (до ремонта). Нет файла — остаётся серый цвет.
+  applyConcrete(group);
+
   return group;
+}
+
+// Натягивает текстуру бетона на голые стены при старте (по аналогии с обоями:
+// каждому сегменту своя копия текстуры с повтором под его размер). Файла нет —
+// стены остаются цветом CONCRETE_COLOR, игра не ждёт.
+function applyConcrete(wallsGroup) {
+  new THREE.TextureLoader().load(
+    'textures/concrete_bare.jpg',
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      wallsGroup.children.forEach((mesh) => {
+        if (!mesh.userData.wallpaper) return; // только стеновые сегменты (не «стекло» окна)
+        const { texW, texH } = mesh.userData.wallpaper;
+        const tex = texture.clone();
+        tex.repeat.set(texW / CONCRETE_TILE, texH / CONCRETE_TILE);
+        mesh.material = new THREE.MeshLambertMaterial({ map: tex });
+      });
+    },
+    undefined,
+    () => {} // нет текстуры — остаётся серый CONCRETE_COLOR (стартовый материал)
+  );
 }
 
 // Клеит обои на стены (вызывается при ремонте из game.js).
