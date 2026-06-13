@@ -3,16 +3,16 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=32';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=32';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=32';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=32';
-import { createPlacement } from './placement.js?v=32';
-import { createUI } from './ui.js?v=32';
-import { renderItemIcon } from './icon.js?v=32';
-import { createPower } from './power.js?v=32';
-import { evaluateCombos } from './combos.js?v=32';
-import { isQuestDone } from './quests.js?v=32';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=33';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=33';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=33';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=33';
+import { createPlacement } from './placement.js?v=33';
+import { createUI } from './ui.js?v=33';
+import { renderItemIcon } from './icon.js?v=33';
+import { createPower } from './power.js?v=33';
+import { evaluateCombos } from './combos.js?v=33';
+import { isQuestDone } from './quests.js?v=33';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -174,13 +174,18 @@ async function init() {
 
   function refreshQuestsUI() {
     const pending = availablePending(questCtx(lastLayout, lastConnections));
-    ui.setQuests(
-      questState.map((q) => ({
-        title: t(locale, `quests.${q.def.id}`),
-        done: q.done,
-        active: pending.includes(q),
-      }))
-    );
+    // Журнал = этапы ремонта (первыми) + квесты
+    const reno = renoSteps.map((s) => ({
+      title: t(locale, s.textKey),
+      done: renoDone[s.key],
+      active: renoActive(s.key),
+    }));
+    const quests = questState.map((q) => ({
+      title: t(locale, `quests.${q.def.id}`),
+      done: q.done,
+      active: pending.includes(q),
+    }));
+    ui.setQuests([...reno, ...quests]);
   }
 
   // Объявление новых заданий крупным модалом — но только появившихся ПОСЛЕ старта.
@@ -239,6 +244,28 @@ async function init() {
   const furnitureIds = records.filter((r) => r.placement !== 'reno').map((r) => r.id);
   const renoDone = { debris: false, window: false, floor: false, walls: false };
 
+  // Этапы ремонта — тоже задания (показываются в журнале + модал при выполнении).
+  // Активен текущий доступный шаг: мусор → окно → (паркет и обои параллельно).
+  const renoSteps = [
+    { key: 'debris', textKey: 'reno_task.debris' },
+    { key: 'window', textKey: 'reno_task.window' },
+    { key: 'floor', textKey: 'reno_task.floor' },
+    { key: 'walls', textKey: 'reno_task.walls' },
+  ];
+  const renoActive = (key) => {
+    if (key === 'debris') return !renoDone.debris;
+    if (key === 'window') return renoDone.debris && !renoDone.window;
+    if (key === 'floor') return renoDone.window && !renoDone.floor;
+    if (key === 'walls') return renoDone.window && !renoDone.walls;
+    return false;
+  };
+  // Модал «выполнено» для этапа ремонта + обновление журнала
+  function completeRenoStep(key) {
+    const step = renoSteps.find((s) => s.key === key);
+    ui.showModal(t(locale, step.textKey), t(locale, 'ui.quest_done_kicker'));
+    refreshQuestsUI();
+  }
+
   function applyReno(def) {
     // Окно: вставляем стекло, открываем паркет и обои
     if (def.applies === 'window') {
@@ -248,6 +275,7 @@ async function init() {
       ui.changeCount(def.id, -1);
       ui.setLocked(['reno_parquet', 'reno_wallpaper'], false);
       refreshComfort();
+      completeRenoStep('window'); // модал «✓ выполнено» + обновить журнал
       ui.showHint(t(locale, 'ui.hint_reno_after_window'));
       return;
     }
@@ -261,6 +289,7 @@ async function init() {
     renoComfort += def.comfort || 0;
     ui.changeCount(def.id, -1);
     refreshComfort();
+    completeRenoStep(def.applies === 'floor' ? 'floor' : 'walls'); // модал + журнал
     if (renoDone.floor && renoDone.walls) {
       ui.setLocked(furnitureIds, false); // ремонт готов — мебель доступна
       ui.showHint(t(locale, 'ui.hint_reno_done'));
@@ -297,6 +326,7 @@ async function init() {
       renoComfort += DEBRIS_COMFORT;
       refreshComfort();
       ui.setLocked(['reno_window'], false); // открываем «вставить окно»
+      completeRenoStep('debris'); // модал «✓ выполнено» + обновить журнал
       ui.showHint(t(locale, 'ui.hint_reno_window'));
     }
   }

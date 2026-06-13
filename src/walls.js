@@ -180,7 +180,7 @@ export function applyWindow(wallsGroup, cols, rows) {
         void main() {
           vec2 uv = vUv;
           float TAU = 6.28318;
-          float phase = fract(uTime / 90.0);   // полные сутки за 90 секунд
+          float phase = fract(uTime / 360.0);  // полные сутки за 6 минут (созерцательно)
           float sun = cos(phase * TAU);        // высота солнца: +1 полдень, -1 полночь
           float dayF = smoothstep(-0.08, 0.45, sun);   // 1 день → 0 ночь
           float nightF = 1.0 - dayF;

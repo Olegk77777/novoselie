@@ -27,7 +27,8 @@
       gap: 8px;
       z-index: 5;
     }
-    /* Низ — только панель предметов, по центру */
+    /* Низ — только панель предметов, по центру. Кнопка «Свернуть» прижата влево
+       (над первой иконкой), чтобы не мешать обзору центра комнаты. */
     #ui-bottom {
       position: fixed;
       bottom: 12px;
@@ -35,7 +36,7 @@
       transform: translateX(-50%);
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: flex-start;
       gap: 8px;
       max-width: 96vw;
     }
@@ -106,8 +107,9 @@
     .ui-scroll-arrow[hidden] {
       display: none;
     }
-    /* Кнопка свернуть/развернуть панель */
+    /* Кнопка свернуть/развернуть панель — выровнена с первой иконкой панели */
     #ui-toggle {
+      margin-left: 12px;
       padding: 8px 20px;
       background: #f0e6d2;
       border: 1px solid #b9a98a;
@@ -380,6 +382,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=32"></script>
+  <script type="module" src="src/game.js?v=33"></script>
 </body>
 </html>
