@@ -12,6 +12,44 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   toast.id = 'ui-hint-toast';
   document.body.appendChild(toast);
 
+  // Модальное уведомление для важных событий (квесты): крупно по центру, с кнопкой
+  // ОК. События идут очередью — следующее показывается после закрытия текущего.
+  const modalOverlay = document.createElement('div');
+  modalOverlay.id = 'ui-modal';
+  modalOverlay.hidden = true;
+  const modalCard = document.createElement('div');
+  modalCard.className = 'ui-modal-card';
+  const modalKicker = document.createElement('div');
+  modalKicker.className = 'ui-modal-kicker';
+  const modalText = document.createElement('div');
+  modalText.className = 'ui-modal-text';
+  const modalOk = document.createElement('button');
+  modalOk.className = 'ui-modal-ok';
+  modalOk.textContent = t('ui.ok');
+  modalCard.append(modalKicker, modalText, modalOk);
+  modalOverlay.appendChild(modalCard);
+  document.body.appendChild(modalOverlay);
+
+  const modalQueue = [];
+  function showNextModal() {
+    if (!modalQueue.length) {
+      modalOverlay.hidden = true;
+      return;
+    }
+    const { text, kicker } = modalQueue[0];
+    modalKicker.textContent = kicker || '';
+    modalKicker.style.display = kicker ? '' : 'none';
+    modalText.textContent = text;
+    modalOverlay.hidden = false;
+    modalCard.classList.remove('pop');
+    void modalCard.offsetWidth; // перезапуск анимации появления
+    modalCard.classList.add('pop');
+  }
+  modalOk.addEventListener('click', () => {
+    modalQueue.shift();
+    showNextModal();
+  });
+
   // Левая колонка: шкала уюта + журнал заданий
   const leftColumn = document.createElement('div');
   leftColumn.id = 'ui-left';
@@ -188,6 +226,12 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn }) {
   return {
     setComfort,
     showHint,
+    // Крупное модальное уведомление с кнопкой ОК (для важных событий — квесты).
+    // kicker — короткая надпись-ярлык сверху («Новое задание» / «Выполнено»).
+    showModal(text, kicker) {
+      modalQueue.push({ text, kicker });
+      if (modalQueue.length === 1) showNextModal();
+    },
     // Обновляет список активных бонусов (results — из combos.js)
     setCombos(results) {
       combosList.textContent = '';

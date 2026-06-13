@@ -20,6 +20,10 @@ export function isQuestDone(quest, ctx) {
     case 'placed':
       return itemsById(quest.item).length > 0;
 
+    case 'placedCount':
+      // Поставлено минимум count предметов item (используется в requires)
+      return itemsById(quest.item).length >= (quest.count || 1);
+
     case 'connected':
       return [...ctx.connections.keys()].some((d) => d.userData.def.id === quest.item);
 

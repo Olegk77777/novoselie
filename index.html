@@ -292,6 +292,67 @@
         transform: translateX(-50%) scale(1);
       }
     }
+    /* Модальное уведомление — крупно по центру, для важных событий (квесты).
+       Появляется, игрок читает и жмёт ОК, затем сообщение уходит в боковую панель. */
+    #ui-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(12, 10, 22, 0.74);
+    }
+    #ui-modal[hidden] {
+      display: none;
+    }
+    .ui-modal-card {
+      background: rgba(34, 32, 56, 0.98);
+      border: 2px solid #c9b88f;
+      border-radius: 14px;
+      padding: 30px 38px;
+      max-width: 560px;
+      text-align: center;
+      box-shadow: 0 14px 50px rgba(0, 0, 0, 0.6);
+      font-family: monospace;
+    }
+    .ui-modal-kicker {
+      color: #e8b96a;
+      font-size: 15px;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .ui-modal-text {
+      color: #f0e6d2;
+      font-size: 25px;
+      line-height: 1.4;
+      margin-bottom: 24px;
+    }
+    .ui-modal-ok {
+      padding: 12px 50px;
+      background: linear-gradient(180deg, #e8b96a, #c97f3d);
+      border: 1px solid #b9a98a;
+      border-radius: 9px;
+      color: #2a1e10;
+      font-family: inherit;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .ui-modal-card.pop {
+      animation: modal-pop 0.32s ease;
+    }
+    @keyframes modal-pop {
+      0% { transform: scale(0.82); opacity: 0; }
+      60% { transform: scale(1.04); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    @media (max-width: 900px) {
+      .ui-modal-text { font-size: 21px; }
+      .ui-modal-card { padding: 24px 26px; max-width: 88vw; }
+    }
     /* Плашка с ошибкой — показывается, только если игра не смогла запуститься */
     #error-overlay {
       display: none;
@@ -319,6 +380,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=30"></script>
+  <script type="module" src="src/game.js?v=31"></script>
 </body>
 </html>

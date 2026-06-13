@@ -3,16 +3,16 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=30';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=30';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=30';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=30';
-import { createPlacement } from './placement.js?v=30';
-import { createUI } from './ui.js?v=30';
-import { renderItemIcon } from './icon.js?v=30';
-import { createPower } from './power.js?v=30';
-import { evaluateCombos } from './combos.js?v=30';
-import { isQuestDone } from './quests.js?v=30';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=31';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=31';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=31';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=31';
+import { createPlacement } from './placement.js?v=31';
+import { createUI } from './ui.js?v=31';
+import { renderItemIcon } from './icon.js?v=31';
+import { createPower } from './power.js?v=31';
+import { evaluateCombos } from './combos.js?v=31';
+import { isQuestDone } from './quests.js?v=31';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -165,8 +165,15 @@ async function init() {
       ),
   });
 
+  // Квест может стать активным, только когда выполнено его условие появления
+  // requires (если задано) — напр. «оба кресла на ковёр» открывается после
+  // установки кресел, а не висит с самого начала.
+  const reqMet = (q, ctx) => !q.def.requires || isQuestDone(q.def.requires, ctx);
+  const availablePending = (ctx) =>
+    questState.filter((q) => !q.done && reqMet(q, ctx)).slice(0, QUESTS_ACTIVE_LIMIT);
+
   function refreshQuestsUI() {
-    const pending = questState.filter((q) => !q.done).slice(0, QUESTS_ACTIVE_LIMIT);
+    const pending = availablePending(questCtx(lastLayout, lastConnections));
     ui.setQuests(
       questState.map((q) => ({
         title: t(locale, `quests.${q.def.id}`),
@@ -176,25 +183,43 @@ async function init() {
     );
   }
 
+  // Объявление новых заданий крупным модалом — но только появившихся ПОСЛЕ старта.
+  // На старте просто запоминаем активные, чтобы не молотить модалами при входе.
+  let questsAnnounced = false;
+  let prevActiveIds = new Set();
+  function announceNewQuests(ctx) {
+    const nowActive = availablePending(ctx);
+    if (questsAnnounced) {
+      for (const q of nowActive) {
+        if (!prevActiveIds.has(q.def.id)) {
+          ui.showModal(t(locale, `quests.${q.def.id}`), t(locale, 'ui.quest_new_kicker'));
+        }
+      }
+    }
+    prevActiveIds = new Set(nowActive.map((q) => q.def.id));
+    questsAnnounced = true;
+  }
+
   function checkQuests(placedItems, connections) {
     const ctx = questCtx(placedItems, connections);
     let changed = true;
     while (changed) {
       changed = false;
-      const active = questState.filter((q) => !q.done).slice(0, QUESTS_ACTIVE_LIMIT);
+      const active = availablePending(ctx);
       for (const quest of active) {
         if (!isQuestDone(quest.def, ctx)) continue;
         quest.done = true;
         changed = true; // следующий квест мог тоже сразу выполниться
         questComfort += quest.def.reward?.comfort || 0;
         for (const it of quest.def.reward?.items || []) ui.changeCount(it.id, it.count);
-        const message = `${t(locale, 'ui.hint_quest_done')} ${t(locale, `quests.${quest.def.id}`)}`;
+        // Выполнение — крупным модалом (раньше был мелкий тост, его не замечали)
         const allDone = questState.every((q) => q.done);
-        // Тост показываем после хинтов установки (они приходят в этом же тике)
-        setTimeout(() => ui.showHint(allDone ? t(locale, 'ui.quests_all_done') : message), 60);
+        if (allDone) ui.showModal(t(locale, 'ui.quests_all_done'));
+        else ui.showModal(t(locale, `quests.${quest.def.id}`), t(locale, 'ui.quest_done_kicker'));
       }
     }
     refreshQuestsUI();
+    announceNewQuests(ctx); // показать модалом задания, открывшиеся только что
   }
 
   // === Электричество, бонусы, квесты: пересчёт при изменении расстановки ===
@@ -337,6 +362,7 @@ async function init() {
   ui.setLocked([...furnitureIds, 'reno_window', 'reno_parquet', 'reno_wallpaper'], true);
   ui.showHint(t(locale, 'ui.hint_reno_debris'));
   refreshQuestsUI();
+  announceNewQuests(questCtx(lastLayout, lastConnections)); // запомнить стартовые (без модалов)
   refreshComfort();
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
