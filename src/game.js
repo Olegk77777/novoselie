@@ -3,16 +3,17 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=37';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow } from './walls.js?v=37';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=37';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=37';
-import { createPlacement } from './placement.js?v=37';
-import { createUI } from './ui.js?v=37';
-import { renderItemIcon } from './icon.js?v=37';
-import { createPower } from './power.js?v=37';
-import { evaluateCombos } from './combos.js?v=37';
-import { isQuestDone } from './quests.js?v=37';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=38';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=38';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=38';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=38';
+import { createPlacement } from './placement.js?v=38';
+import { createUI } from './ui.js?v=38';
+import { renderItemIcon } from './icon.js?v=38';
+import { createPower } from './power.js?v=38';
+import { evaluateCombos } from './combos.js?v=38';
+import { isQuestDone } from './quests.js?v=38';
+import { createCat } from './cat.js?v=38';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -73,6 +74,14 @@ async function init() {
   scene.add(createGridLines(GRID_COLS, GRID_ROWS));
   const walls = createWalls(GRID_COLS, GRID_ROWS);
   scene.add(walls);
+
+  // Кот-житель: бонус за квест «табурет у окна». Создаётся скрытым, оживает после
+  // выполнения квеста — забегает из дверного проёма, прыгает на свой табурет, сидит,
+  // убегает. Появление отсюда (центр дверного проёма по Z).
+  const cat = createCat({
+    scene,
+    doorPoint: { x: -GRID_COLS / 2 + 0.5, z: DOOR_CENTER_Z },
+  });
 
   // Рендерер — рисует сцену в <canvas> на странице
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -136,6 +145,9 @@ async function init() {
   let windowGlass = null;   // материал стекла окна (анимируется в кадровом цикле)
   let questComfort = 0;     // очки-награды за выполненные квесты
   let comboResults = [];    // текущие бонусы (combos.js)
+  // Кот пришёл, а его табурет занят предметом — показываем задание «освободить место».
+  // 0 очков уюта: шкала закрывается и без него (если место свободно — задания нет вовсе).
+  let catSpotBlocked = false;
 
   function refreshComfort() {
     const comboSum = comboResults.filter((c) => c.active).reduce((s, c) => s + c.bonus, 0);
@@ -185,7 +197,20 @@ async function init() {
       done: q.done,
       active: pending.includes(q),
     }));
-    ui.setQuests([...reno, ...quests]);
+    // Задание кота — динамическое: появляется, только пока его табурет занят
+    const catTask = catSpotBlocked
+      ? [{ title: t(locale, 'quests.free_cat_spot'), done: false, active: true }]
+      : [];
+    ui.setQuests([...reno, ...quests, ...catTask]);
+  }
+
+  // Кот пришёл к занятому табурету / место освободилось — обновляем задание.
+  // Модал показываем один раз при появлении задания (как у обычных квестов).
+  function setCatSpotBlocked(value) {
+    if (value === catSpotBlocked) return;
+    catSpotBlocked = value;
+    if (value) ui.showModal(t(locale, 'quests.free_cat_spot'), t(locale, 'ui.quest_new_kicker'));
+    refreshQuestsUI();
   }
 
   // Объявление новых заданий крупным модалом — но только появившихся ПОСЛЕ старта.
@@ -409,6 +434,21 @@ async function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
+  // «Котов табурет» — ближайший к окну табурет в радиусе квеста (1.5 клетки).
+  // Это цель кота; занятость берём из occupant (на табурет поставили ТВ/магнитофон/цветок).
+  const catWindowZ = wallSurfaces[0].plane;
+  function catTargetStool() {
+    let best = null, bestD = Infinity;
+    for (const it of lastLayout) {
+      if (it.userData.def.id !== 'stool') continue;
+      const cx = Math.min(Math.max(it.position.x, windowCutout.alongMin), windowCutout.alongMax);
+      const d = Math.hypot(it.position.x - cx, it.position.z - catWindowZ);
+      if (d <= 1.5 && d < bestD) { bestD = d; best = it; }
+    }
+    return best;
+  }
+  const isCatActive = () => questState.some((q) => q.def.id === 'cat' && q.done);
+
   // Главный цикл: перерисовываем сцену каждый кадр
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {
@@ -418,6 +458,14 @@ async function init() {
     if (windowGlass) windowGlass.uniforms.uTime.value = time;
     // Анимированные предметы (аквариум: вода, рыбки, пузырьки) — у кого есть tick
     scene.traverse((o) => { if (o.userData.tick) o.userData.tick(time); });
+    // Кот: забегает на свой табурет у окна, если квест выполнен
+    const catStool = catTargetStool();
+    cat.update(time, {
+      active: isCatActive(),
+      stool: catStool,
+      occupied: catStool ? !!catStool.userData.occupant : false,
+    });
+    setCatSpotBlocked(cat.isSpotBlocked());
     renderer.render(scene, camera);
   });
 }
