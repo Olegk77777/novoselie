@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=56">
-  <link rel="stylesheet" href="design/type.css?v=56">
+  <link rel="stylesheet" href="design/colors.css?v=57">
+  <link rel="stylesheet" href="design/type.css?v=57">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -90,6 +90,9 @@
     body.cinema #ui-cinema { opacity: 0.32; }
     body.cinema #ui-cinema:hover { opacity: 1; }
     /* Низ — панель предметов по центру; «Свернуть» прижата влево. */
+    /* z-index ВЫШЕ, чем у левого журнала (#ui-left): на планшете бумажки квестов
+       и бонусов свисают в нижний угол — функциональная панель, «Свернуть» и ячейки
+       должны лежать ПОВЕРХ них и оставаться кликабельными. */
     #ui-bottom {
       position: fixed;
       bottom: 12px;
@@ -100,6 +103,7 @@
       align-items: flex-start;
       gap: 8px;
       max-width: 96vw;
+      z-index: 5;
     }
     #ui-panel-wrap {
       position: relative;
@@ -301,6 +305,10 @@
     .ui-btn-ico { color: var(--amber); font-size: 1.2em; line-height: 1; }
 
     /* === Левая колонка: шкала уюта + журнал + бонусы === */
+    /* СЛОЙ НИЖЕ функциональной панели (#ui-bottom z-index:5) — журнал чисто
+       информационный, поэтому pointer-events:none (клики проходят насквозь) и
+       z-index:1: если бумажки свисают на «Свернуть»/ячейки, те остаются сверху и
+       рабочими. */
     #ui-left {
       position: fixed;
       top: 14px;
@@ -308,7 +316,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      z-index: 4;
+      z-index: 1;
       pointer-events: none;
       max-width: 250px;
     }
@@ -617,6 +625,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=56"></script>
+  <script type="module" src="src/game.js?v=57"></script>
 </body>
 </html>

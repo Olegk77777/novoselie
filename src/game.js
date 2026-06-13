@@ -3,19 +3,19 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=56';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=56';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=56';
-import { MODEL_BUILDERS, createDebrisField, createDustMotes } from './items.js?v=56';
-import { createPlacement } from './placement.js?v=56';
-import { createUI } from './ui.js?v=56';
-import { renderItemIcon } from './icon.js?v=56';
-import { createPower } from './power.js?v=56';
-import { evaluateCombos } from './combos.js?v=56';
-import { isQuestDone } from './quests.js?v=56';
-import { createCat } from './cat.js?v=56';
-import { createLighting } from './lighting.js?v=56';
-import { createBloom } from './bloom.js?v=56';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=57';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=57';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=57';
+import { MODEL_BUILDERS, createDebrisField, createDustMotes } from './items.js?v=57';
+import { createPlacement } from './placement.js?v=57';
+import { createUI } from './ui.js?v=57';
+import { renderItemIcon } from './icon.js?v=57';
+import { createPower } from './power.js?v=57';
+import { evaluateCombos } from './combos.js?v=57';
+import { isQuestDone } from './quests.js?v=57';
+import { createCat } from './cat.js?v=57';
+import { createLighting } from './lighting.js?v=57';
+import { createBloom } from './bloom.js?v=57';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -347,9 +347,9 @@ async function init() {
 
   // === Ремонт по шагам: мусор → окно → паркет → обои → мебель ===
   const furnitureIds = records.filter((r) => r.placement !== 'reno').map((r) => r.id);
-  // Часть предметов открывается не вместе с мебелью, а наградой за событие:
-  // удлинитель — после электрификации, лава-лампа — за квест «гости» (см. reward.unlock).
-  const QUEST_REWARD_IDS = new Set([EXTENSION_ID, 'lava_lamp']);
+  // Часть предметов открывается не вместе с мебелью, а наградой за событие: удлинитель —
+  // после электрификации, лава-лампа — за «гости», круглый ковёр — за «соседи» (reward.unlock).
+  const QUEST_REWARD_IDS = new Set([EXTENSION_ID, 'lava_lamp', 'round_rug']);
   const unlockAfterReno = furnitureIds.filter((id) => !QUEST_REWARD_IDS.has(id));
   const renoDone = { debris: false, window: false, floor: false, walls: false };
 

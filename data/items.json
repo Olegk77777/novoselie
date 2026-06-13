@@ -15,6 +15,7 @@
     { "id": "tv_stand", "model": "tv_stand", "size": [1, 1], "comfort": 3, "placement": "floor", "count": 1, "surfaceHeight": 0.42, "surface": "matte" },
     { "id": "tv", "model": "tv", "size": [1, 1], "comfort": 6, "placement": "floor", "count": 1, "mountable": true, "cordLength": 2, "surface": "combined" },
     { "id": "floor_rug", "model": "floor_rug", "size": [3, 2], "comfort": 7, "placement": "floor", "layer": "rug", "count": 1, "surface": "matte" },
+    { "id": "round_rug", "model": "round_rug", "size": [3, 3], "comfort": 7, "placement": "floor", "layer": "rug", "count": 1, "surface": "matte" },
     { "id": "wall_rug", "model": "wall_rug", "size": [3, 1], "comfort": 9, "placement": "wall", "count": 1, "surface": "matte" },
     { "id": "curtains", "model": "curtains", "size": [3, 1], "comfort": 7, "placement": "wall", "count": 1, "fixedWall": "back", "fixedAlong": 0, "fixedWallHeight": 1.45, "overWindow": true, "surface": "matte" },
     { "id": "floor_lamp", "model": "floor_lamp", "size": [1, 1], "comfort": 6, "placement": "floor", "count": 1, "cordLength": 3, "surface": "combined" },

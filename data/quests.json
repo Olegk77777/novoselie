@@ -11,6 +11,6 @@
     { "id": "crystal", "type": "nearWall", "item": "cupboard", "maxDist": 1.2, "reward": { "comfort": 5 } },
     { "id": "concert", "type": "all", "conditions": [{ "type": "near", "a": "tape_player", "b": "tv", "maxDist": 2 }, { "type": "connected", "item": "tape_player" }, { "type": "connected", "item": "tv" }], "reward": { "comfort": 4 } },
     { "id": "seedlings", "type": "nearWindow", "item": "flower_pot", "maxDist": 2, "reward": { "comfort": 3 } },
-    { "id": "neighbors", "type": "onRug", "item": "armchair", "rug": "floor_rug", "minCount": 2, "requires": { "type": "placedCount", "item": "armchair", "count": 2 }, "reward": { "comfort": 6, "items": [{ "id": "floor_rug", "count": 1 }] } }
+    { "id": "neighbors", "type": "onRug", "item": "armchair", "rug": "floor_rug", "minCount": 2, "requires": { "type": "placedCount", "item": "armchair", "count": 2 }, "reward": { "comfort": 6, "unlock": ["round_rug"] }, "doneText": "quests.neighbors_done", "doneKicker": "ui.gift_kicker" }
   ]
 }

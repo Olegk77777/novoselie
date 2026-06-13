@@ -35,6 +35,9 @@ const plasticMaterial = texturedMaterial('textures/plastic_dark.jpg', 0x35353c, 
 const metalMaterial = texturedMaterial('textures/metal_brushed.jpg', 0x8a8c94, 'металл');
 // Узор ковра: маппится на верх ковра один-в-один (не повторяется)
 const rugPatternMaterial = texturedMaterial('textures/rug_pattern.jpg', 0xb05a40, 'узор ковра');
+// Круглый ковёр (награда за квест «соседи»): другой узор/цвет. Натягивается на круглую
+// крышку диска — геометрия сама обрезает квадратную картинку в круг, альфа-канал не нужен.
+const roundRugMaterial = texturedMaterial('textures/rug_round.jpg', 0x5a6b62, 'круглый ковёр');
 // Ткани: обивка кресла (оливковая рогожка), плед-одеяло, постельный тик
 const fabricMaterial = texturedMaterial('textures/fabric_green.jpg', 0x8a875a, 'обивка');
 const blanketMaterial = texturedMaterial('textures/bedspread_pattern.jpg', 0x7a3a2e, 'плед');
@@ -1086,7 +1089,7 @@ export function createTVStand() {
 export function createTV() {
   const g = new THREE.Group();
   const dark = lambert(0x2a2a30);
-  const knob = lambert(0xc8c2b2); // кремовые ручки-верньеры
+  const knob = lambert(0x4d4d55); // тёмно-серые ручки-верньеры (не выбиваются на корпусе)
   // Ножки
   for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
     g.add(box(0.06, 0.07, 0.06, dark, sx * 0.26, 0.035, sz * 0.17));
@@ -1157,6 +1160,19 @@ export function createTV() {
 export function createFloorRug() {
   const g = new THREE.Group();
   g.add(box(2.9, 0.05, 1.9, rugPatternMaterial, 0, 0.025, 0));
+  return g;
+}
+
+// === Круглый ковёр на пол 3×3 (награда за квест «соседи») ===
+// Плоский диск-цилиндр: верхняя крышка — круг, квадратная текстура ложится на неё и
+// обрезается в круг самой геометрией. Поэтому Олегу НЕ нужен альфа-канал — рисунок
+// квадратный, круглую форму делает диск. 48 граней — край гладкий. Мебель можно
+// ставить сверху (layer: rug). Радиус 1.45 < 1.5 — диск вписан в клетки 3×3.
+export function createRoundRug() {
+  const g = new THREE.Group();
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.45, 0.05, 48), roundRugMaterial);
+  disc.position.set(0, 0.025, 0);
+  g.add(disc);
   return g;
 }
 
@@ -1683,6 +1699,7 @@ export const MODEL_BUILDERS = {
   tv: createTV,
   tv_stand: createTVStand,
   floor_rug: createFloorRug,
+  round_rug: createRoundRug,
   wall_rug: createWallRug,
   floor_lamp: createFloorLamp,
   curtains: createCurtains,
