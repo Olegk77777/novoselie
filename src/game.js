@@ -3,18 +3,19 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=54';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=54';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=54';
-import { MODEL_BUILDERS, createDebrisField, createDustMotes } from './items.js?v=54';
-import { createPlacement } from './placement.js?v=54';
-import { createUI } from './ui.js?v=54';
-import { renderItemIcon } from './icon.js?v=54';
-import { createPower } from './power.js?v=54';
-import { evaluateCombos } from './combos.js?v=54';
-import { isQuestDone } from './quests.js?v=54';
-import { createCat } from './cat.js?v=54';
-import { createLighting } from './lighting.js?v=54';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=55';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=55';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=55';
+import { MODEL_BUILDERS, createDebrisField, createDustMotes } from './items.js?v=55';
+import { createPlacement } from './placement.js?v=55';
+import { createUI } from './ui.js?v=55';
+import { renderItemIcon } from './icon.js?v=55';
+import { createPower } from './power.js?v=55';
+import { evaluateCombos } from './combos.js?v=55';
+import { isQuestDone } from './quests.js?v=55';
+import { createCat } from './cat.js?v=55';
+import { createLighting } from './lighting.js?v=55';
+import { createBloom } from './bloom.js?v=55';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -113,6 +114,11 @@ async function init() {
   document.body.appendChild(renderer.domElement);
   // Карта теней статична между перестановками — пересчитать по требованию.
   const bumpShadows = () => { renderer.shadowMap.needsUpdate = true; };
+
+  // Bloom/Glow — мягкое свечение вокруг светлых участков (луна, лампы, экран ТВ, аквариум).
+  // Не трогает основной рендер: снимает готовый кадр с холста и аддитивно подмешивает сияние
+  // (см. src/bloom.js). Параметры (сила/порог/оттенок) приходят из lighting.js каждый кадр.
+  const bloom = createBloom(renderer);
 
   // Управление зумом: колесо мыши + щипок двумя пальцами на сенсоре
   attachZoomControls(renderer.domElement, zoomBy);
@@ -531,6 +537,7 @@ async function init() {
   // При изменении размера окна пересчитываем камеру и холст
   window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
+    bloom.setSize();      // пересоздать цели Bloom под новый размер кадра
     updateReservedLeft(); // заново измерить полосу HUD (вызовет вписывание)
     resizeCamera();       // обновить aspect + вписать комнату
   });
@@ -563,7 +570,8 @@ async function init() {
     if (windowGlass) windowGlass.uniforms.uTime.value = time;
     // Свет комнаты реагирует на окно: оконный свет/полусфера пересчитываются из того же
     // времени (день холодный → закат янтарь → ночь тьма + серебро луны → дождь свинец).
-    lighting.update(time, !!windowGlass);
+    // update() заодно отдаёт параметры Bloom (ярче ночью/в полнолуние).
+    const bloomParams = lighting.update(time, !!windowGlass);
     // Анимированные предметы (аквариум: вода, рыбки, пузырьки) — у кого есть tick
     scene.traverse((o) => { if (o.userData.tick) o.userData.tick(time); });
     // Кот: забегает на свой табурет у окна, если квест выполнен
@@ -576,6 +584,7 @@ async function init() {
     });
     setCatSpotBlocked(cat.isSpotBlocked());
     renderer.render(scene, camera);
+    bloom.apply(bloomParams); // мягкое свечение поверх готового кадра
   });
 }
 

@@ -396,7 +396,8 @@ float winterFrost(vec2 uv, float t, float asp){
 float fullMoonNight(float t){
   float dayIndex = floor(t / 360.0);
   float r = hash1(dayIndex * 1.731 + 4.20);
-  return smoothstep(0.62, 0.72, r);
+  // Полнолуние ЧАЩЕ (большая яркая луна — украшение коротких ночей): ~⅔ ночей.
+  return smoothstep(0.20, 0.42, r);
 }
 
 // луна: диск + гало, отдаёт центр (moonPos) и стабильный световой вектор (moonDir)
@@ -412,7 +413,7 @@ vec3 moonRender(vec2 uv, float phase, float moonFull, float nightF, float clarit
   vec2 d = uv - mp; d.x *= uAspect;
   float r = length(d);
 
-  float rad = mix(0.052, 0.105, moonFull);
+  float rad = mix(0.075, 0.160, moonFull);   // КРУПНАЯ луна (особенно полная)
   float disc = smoothstep(rad, rad * 0.82, r);
 
   // вырез серпа на неполных ночах
@@ -432,10 +433,10 @@ vec3 moonRender(vec2 uv, float phase, float moonFull, float nightF, float clarit
   vec3 moonCol = mix(vec3(0.78, 0.82, 0.90), vec3(0.92, 0.92, 0.86), moonFull);
   vec3 body = moonCol * seas * limb;
 
-  float haloR = mix(0.16, 0.42, moonFull);
+  float haloR = mix(0.20, 0.52, moonFull);   // шире гало вокруг крупной луны
   float halo  = smoothstep(haloR, 0.0, r);
-  halo = pow(halo, 1.6);
-  float haloAmt = (0.10 + 0.55 * moonFull) * clarity;
+  halo = pow(halo, 1.5);
+  float haloAmt = (0.14 + 0.80 * moonFull) * clarity;
   vec3 haloCol = vec3(0.55, 0.66, 0.85);
 
   vec3 outc = body * lit
@@ -493,8 +494,8 @@ vec3 skyGradient(vec2 uv, float dayF, float nightF, float duskMix,
                    smoothstep(0.0,0.85,uv.y));
   vec3 col = mix(night, day, dayF);
   col = mix(col, dusk, duskMix*0.75);
-  // холодный лунный налёт высоко в ночном небе
-  col += vec3(0.10,0.13,0.20) * moonWash * smoothstep(0.20,1.0,uv.y) * 0.35;
+  // холодный лунный налёт высоко в ночном небе (ярче — крупная луна сильнее «светит»)
+  col += vec3(0.12,0.16,0.28) * moonWash * smoothstep(0.20,1.0,uv.y) * 0.5;
   // мягкий сезонный сдвиг палитры
   col = mix(col, col*seasonTint, 0.55);
   return col;
@@ -673,8 +674,8 @@ vec3 scene(vec2 uv, float phase, float dayF, float nightF, float duskMix,
   // небо
   vec3 col = skyGradient(uv, dayF, nightF, duskMix, pal.skyTint, moonWash);
 
-  // лунный амбиент — серебряная ванна всей ночной сцены
-  col += vec3(0.10, 0.13, 0.20) * moonWash * (0.35 + 0.65 * smoothstep(0.0,1.0,uv.y));
+  // лунный амбиент — серебряно-синяя ванна всей ночной сцены (ярче: луна мощнее освещает)
+  col += vec3(0.12, 0.17, 0.30) * moonWash * (0.45 + 0.75 * smoothstep(0.0,1.0,uv.y));
 
   // звёзды — гаснут в полнолуние и в тучах (compute только ночью)
   if (nightF > 0.01){
@@ -710,7 +711,7 @@ vec3 scene(vec2 uv, float phase, float dayF, float nightF, float duskMix,
   float reflX = abs((uv.x - moonPos.x) * uAspect);
   float refl  = smoothstep(0.10, 0.0, reflX)
               * smoothstep(0.40, 0.12, uv.y) * smoothstep(0.0, 0.10, uv.y);
-  col += vec3(0.55, 0.66, 0.85) * refl * moonWash * 0.18;
+  col += vec3(0.58, 0.70, 0.92) * refl * moonWash * 0.28;
 
   return col;
 }
@@ -748,15 +749,17 @@ void main() {
   float snowF = sw.y;
 
   // (2) сутки, сдвинутые по сезону (зимой темнее/короче).
-  // sunDay = sun + DAY_BIAS — смещаем «солнце» вверх, чтобы ДЕНЬ был длиннее НОЧИ
-  // (день ~48%, ночь ~34%). Позиции солнца/луны считаются по phase и не меняются.
+  // НОЧЬ В ~4 РАЗА КОРОЧЕ ДНЯ: дневной порог сдвинут к sun=-1, поэтому «солнце над
+  // горизонтом» бо́льшую часть суток (день ~64%), а глубокая ночь — узкое окно у sun=-1
+  // (~16%). Закат/рассвет (duskMix) — узкая полоса перехода у sun≈-0.66. Позиции
+  // солнца/луны считаются по phase и не меняются.
+  // SYNC: эти же константы продублированы в lighting.js (свет комнаты).
   float phase = fract(t / 360.0);
   float sun = cos(phase * TAU);
-  float sunDay = sun + 0.4;
   float bias = seasonDayBias(sw);
-  float dayF = smoothstep(-0.08 + bias, 0.45 + bias, sunDay);
+  float dayF = smoothstep(-0.88 + bias, -0.44 + bias, sun);
   float nightF = 1.0 - dayF;
-  float duskMix = smoothstep(0.55, 0.0, abs(sunDay));
+  float duskMix = smoothstep(0.30, 0.0, abs(sun - (-0.66 + bias)));
 
   // (3) погодный цикл — тайминг прежний, смысл переосмыслен по сезону
   float wc = fract(t / 110.0);

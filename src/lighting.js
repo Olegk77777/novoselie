@@ -86,11 +86,21 @@ export function createLighting(scene, opts = {}) {
   const C_DUSK = new THREE.Color(0xff8a44); // тёплый закат (золотой час)
   const C_NIGHT = new THREE.Color(0x0c1430); // почти тьма, глубокий синий
   const C_RAIN = new THREE.Color(0x586781); // свинцовый дождь
-  const C_MOON = new THREE.Color(0xbcd0f4); // серебро полнолуния
+  const C_MOON = new THREE.Color(0x9bb8f4); // серебро полнолуния — холоднее, синее
+  const C_MOON_HEMI = new THREE.Color(0x6f86c4); // синий сдвиг рассеянного света в полнолуние
   const HEMI_NIGHT = new THREE.Color(0x515d7e); // ночной полумрак — синеватый, но комната ХОРОШО видна
   const HEMI_DAY = new THREE.Color(0x5e7090);
   const scratch = new THREE.Color();
   const scratch2 = new THREE.Color();
+
+  // Состояние Bloom — читает game.js каждый кадр и отдаёт в bloom.apply(). Пересчитывается
+  // из времени/луны (ночью и в полнолуние свечение ярче и чуть холоднее = таинственнее).
+  const bloomState = { strength: 0.5, threshold: 0.64, tint: [1, 1, 1] };
+  function setBloom(strength, threshold, tr, tg, tb) {
+    bloomState.strength = strength;
+    bloomState.threshold = threshold;
+    bloomState.tint[0] = tr; bloomState.tint[1] = tg; bloomState.tint[2] = tb;
+  }
 
   // Троттлинг: сутки = 360 c, глаз не заметит пересчёт раз в 4 кадра — CPU почти в ноль.
   let frame = 0;
@@ -99,7 +109,7 @@ export function createLighting(scene, opts = {}) {
   //     Эти величины живут только в GPU-шейдере — общий импорт в GLSL невозможен.
   //     ПРАВИШЬ ОКОННЫЙ ШЕЙДЕР — ПРАВЬ И ЗДЕСЬ, иначе свет комнаты разойдётся с картинкой. ===
   function update(time, hasWindow) {
-    if (frame++ % 4 !== 0) return; // считаем на каждом 4-м кадре (первый — сразу)
+    if (frame++ % 4 !== 0) return bloomState; // считаем на каждом 4-м кадре (первый — сразу)
 
     // Окна-стекла ещё нет (комната до ремонта) — холодный дневной свет из проёма (видно
     // прибраться), без сезонной математики (картинка за стеклом ещё не идёт).
@@ -110,7 +120,8 @@ export function createLighting(scene, opts = {}) {
       winSpill.intensity = 7.0; // холодный поток из пустого проёма (видно прибраться)
       hemi.color.setHex(0x45526e);
       hemi.intensity = 0.7;
-      return;
+      setBloom(0.45, 0.66, 1, 1, 1); // мягкое нейтральное свечение в голой комнате
+      return bloomState;
     }
 
     const t = time;
@@ -131,11 +142,11 @@ export function createLighting(scene, opts = {}) {
     //     день длиннее ночи (SYNC с walls.js: тот же сдвиг).
     const phase = fract(t / 360);
     const sun = Math.cos(phase * TAU); // +1 — полдень, -1 — полночь
-    const sunDay = sun + 0.4;
     const bias = 0.16 * w[1] - 0.1 * w[2] - 0.06 * w[3];
-    const dayF = smoothstep(-0.08 + bias, 0.45 + bias, sunDay);
+    // SYNC с walls.js: ночь в ~4 раза короче дня (дневной порог сдвинут к sun=-1).
+    const dayF = smoothstep(-0.88 + bias, -0.44 + bias, sun);
     const nightF = 1 - dayF;
-    const duskMix = smoothstep(0.55, 0, Math.abs(sunDay)); // максимум на закате/рассвете
+    const duskMix = smoothstep(0.30, 0, Math.abs(sun - (-0.66 + bias))); // максимум на закате/рассвете
 
     // (3) погода: окно дождя/тумана по кругу (110 c)
     const wc = fract(t / 110);
@@ -146,30 +157,42 @@ export function createLighting(scene, opts = {}) {
 
     // (4) полнолуние: стабильно на ночь. «Лунная ванна» — только в ГЛУБОКУЮ ночь
     //     (на закате duskMix→1 гасим, иначе серебро размывает янтарь заката).
-    const moonF = smoothstep(0.62, 0.72, hash1(Math.floor(t / 360) * 1.731 + 4.2));
+    const moonF = smoothstep(0.20, 0.42, hash1(Math.floor(t / 360) * 1.731 + 4.2));
     const moonWash = moonF * nightF * (1 - duskMix);
 
     // --- цвет оконного света ---
     scratch.copy(C_NIGHT).lerp(C_DAY, dayF);
     scratch.lerp(C_DUSK, duskMix * 0.85);
     scratch.lerp(C_RAIN, rainRaw * 0.4);
-    scratch.lerp(C_MOON, moonWash * 0.6);
+    scratch.lerp(C_MOON, moonWash * 0.85); // в полнолуние свет заметно синеет
     win.color.copy(scratch);
     winSpill.color.copy(scratch); // поток из окна — того же цвета, что оконный свет
 
-    // --- яркость направленного окна (даёт форму и мягкую тень) ---
-    win.intensity = (2.0 * dayF * clarity + duskMix * 1.0 * clarity + moonWash * 0.6 + 0.06) * mood;
+    // --- яркость направленного окна (даёт форму и мягкую тень; в полнолуние — лунный ключ) ---
+    win.intensity = (2.0 * dayF * clarity + duskMix * 1.0 * clarity + moonWash * 1.1 + 0.06) * mood;
 
-    // --- ВИДИМЫЙ поток из окна на пол — основная «масса» света от окна (decay 1, широкий) ---
-    winSpill.intensity = (16.0 * dayF * clarity + duskMix * 8.0 * clarity + moonWash * 4.5) * mood;
+    // --- ВИДИМЫЙ поток из окна на пол — основная «масса» света от окна (decay 1, широкий).
+    //     Полная луна заметно сильнее заливает комнату синеватым светом. ---
+    winSpill.intensity = (16.0 * dayF * clarity + duskMix * 8.0 * clarity + moonWash * 7.5) * mood;
 
     // --- HEMI — мягкое рассеянное заполнение, покрывает всю комнату; дышит сутками.
     //     Ночная база высокая (0.95 — синие сумерки), чтобы комната была ВИДНА даже без
-    //     зажжённых ламп (день/ночь различаются окном, а не этим заполнением) ---
-    hemi.intensity = 0.95 + 0.25 * dayF + 0.12 * moonWash;
+    //     зажжённых ламп; в полнолуние воздух синеет и светлеет ещё сильнее ---
+    hemi.intensity = 0.95 + 0.25 * dayF + 0.30 * moonWash;
     scratch2.copy(HEMI_NIGHT).lerp(HEMI_DAY, dayF);
+    scratch2.lerp(C_MOON_HEMI, moonWash * 0.5);
     hemi.color.copy(scratch2);
+
+    // --- параметры Bloom: ярче и мягче ночью и в полнолуние (таинственное свечение),
+    //     слегка холоднее под луной (тёплые лампы при этом остаются тёплыми) ---
+    const cool = moonWash * 0.6;
+    setBloom(
+      0.40 + 0.50 * nightF + 0.55 * moonWash,
+      0.70 - 0.18 * nightF,
+      1 - 0.10 * cool, 1 - 0.02 * cool, 1 + 0.16 * cool
+    );
+    return bloomState;
   }
 
-  return { hemi, win, winSpill, door, update, lowEnd: LOW_END };
+  return { hemi, win, winSpill, door, update, bloomState, lowEnd: LOW_END };
 }
