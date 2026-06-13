@@ -28,6 +28,9 @@ function texturedMaterial(url, fallbackColor, warnName) {
 
 // Общие материалы мебели (текстуры волокон/фактуры делают заметным и поворот)
 const woodMaterial = texturedMaterial('textures/wood_light.jpg', 0x9c6b30, 'дерево');
+// Орех — отдельный тёмный класс дерева. Пока только у серванта; позже можно
+// присвоить и другим «статусным» предметам (новый предмет = указать этот материал).
+const walnutMaterial = texturedMaterial('textures/wood_walnut.jpg', 0x7a4028, 'орех');
 const plasticMaterial = texturedMaterial('textures/plastic_dark.jpg', 0x35353c, 'пластик');
 const metalMaterial = texturedMaterial('textures/metal_brushed.jpg', 0x8a8c94, 'металл');
 // Узор ковра: маппится на верх ковра один-в-один (не повторяется)
@@ -111,8 +114,12 @@ export function createTable() {
 // с полками и посудой, по краям карниз и цоколь. Высота ~2.0.
 export function createCupboard() {
   const g = new THREE.Group();
-  // Локальные тона (корпус — общая текстура дерева, остальное — оттенки от неё)
-  const shadow = lambert(0x5e3e1e);   // тёмное дерево: цоколь, теневые пояски
+  // Корпус серванта — из ореха: локально подменяем материал дерева на ореховый,
+  // поэтому весь корпус ниже (woodMaterial) рисуется тёмной текстурой. Остальная
+  // мебель в игре по-прежнему светлая — у неё свой woodMaterial.
+  const woodMaterial = walnutMaterial;
+  // Локальные тона (тёмные акценты — темнее ореха, для контраста с посудой)
+  const shadow = lambert(0x3a2014);   // тёмная тень: цоколь, теневые пояски
   const inset = lambert(0x7a4e26);    // утопленная филёнка дверцы
   const back = lambert(0x3a2616);     // тёмный полированный шпон задней стенки (контраст для посуды)
   // Полки и дверцы — стекло. depthWrite:false, чтобы сквозь них была видна
