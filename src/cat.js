@@ -126,7 +126,7 @@ function applyPose(parts, kind, t) {
 // Контроллер кота. doorPoint — точка появления у дверного проёма (мир, на полу).
 // cols/rows/sub — сетка комнаты (sub = подклеток в клетке, как SUB в placement.js):
 // по ней кот ищет путь A* и ОБХОДИТ мебель (занятость приходит в ctx.isBlocked).
-export function createCat({ scene, doorPoint, cols, rows, sub }) {
+export function createCat({ scene, doorPoint, cols, rows, sub, windowFocus }) {
   const root = buildCatModel();
   root.visible = false;
   scene.add(root);
@@ -149,8 +149,9 @@ export function createCat({ scene, doorPoint, cols, rows, sub }) {
   let path = [], pathI = 0, goalKey = ''; // текущий маршрут (мировые точки) и индекс
   let isBlocked = () => false;            // занятость клетки мебелью (из ctx)
 
-  // Сидя кот развёрнут на 3/4 к зрителю (видно мордочку и глаза), а не спиной в окно.
-  const SIT_FACE = Math.PI * 0.18;
+  // Сидя кот смотрит В ОКНО (на центр оконного проёма дальней стены). Точка окна
+  // приходит из game.js; запасной вариант — центр дальней стены.
+  const winFocus = windowFocus || { x: 0, z: -rows / 2 };
   const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
   const prog = () => THREE.MathUtils.clamp((now - stateStart) / moveDur, 0, 1);
   const sitY = (stool) => (stool.userData.def.surfaceHeight || 0.5) - 0.1;
@@ -285,7 +286,8 @@ export function createCat({ scene, doorPoint, cols, rows, sub }) {
     from.copy(root.position);
     to.set(stool.position.x, sitY(stool), stool.position.z);
     moveDur = 0.55; stateStart = now;
-    yawFrom = root.rotation.y; yawTo = SIT_FACE;
+    yawFrom = root.rotation.y;
+    yawTo = yawOf(stool.position.x, stool.position.z, winFocus.x, winFocus.z); // приземлится мордой в окно
     enter('jumping');
   }
   function goLeave() { leaveStartY = root.position.y; buildPath(DOOR); enter('leaving'); }
@@ -335,7 +337,8 @@ export function createCat({ scene, doorPoint, cols, rows, sub }) {
         const p = ease(prog());
         root.position.lerpVectors(from, to, p);
         root.position.y = from.y + (to.y - from.y) * p + Math.sin(prog() * Math.PI) * 0.28; // дуга прыжка
-        root.rotation.y = yawFrom + (yawTo - yawFrom) * p;
+        const dyaw = Math.atan2(Math.sin(yawTo - yawFrom), Math.cos(yawTo - yawFrom)); // кратчайший доворот
+        root.rotation.y = yawFrom + dyaw * p;
         applyPose(parts, prog() < 0.6 ? 'run' : 'sit', time);
         if (prog() >= 1) { root.position.copy(to); enter('sitting'); }
         break;
@@ -344,7 +347,7 @@ export function createCat({ scene, doorPoint, cols, rows, sub }) {
       case 'sitting':
         if (!stool) { goLeave(); break; }
         root.position.set(stool.position.x, sitY(stool), stool.position.z);
-        root.rotation.y = SIT_FACE;       // сидит, развёрнут на 3/4 к зрителю
+        root.rotation.y = yawOf(stool.position.x, stool.position.z, winFocus.x, winFocus.z); // смотрит в окно
         applyPose(parts, 'sit', time);
         if (occupied) { goLeave(); break; } // на стул что-то поставили — уходит
         if (now - stateStart > 8) goLeave();

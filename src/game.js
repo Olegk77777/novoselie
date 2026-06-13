@@ -3,17 +3,17 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=39';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=39';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=39';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=39';
-import { createPlacement } from './placement.js?v=39';
-import { createUI } from './ui.js?v=39';
-import { renderItemIcon } from './icon.js?v=39';
-import { createPower } from './power.js?v=39';
-import { evaluateCombos } from './combos.js?v=39';
-import { isQuestDone } from './quests.js?v=39';
-import { createCat } from './cat.js?v=39';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=40';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=40';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=40';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=40';
+import { createPlacement } from './placement.js?v=40';
+import { createUI } from './ui.js?v=40';
+import { renderItemIcon } from './icon.js?v=40';
+import { createPower } from './power.js?v=40';
+import { evaluateCombos } from './combos.js?v=40';
+import { isQuestDone } from './quests.js?v=40';
+import { createCat } from './cat.js?v=40';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -79,10 +79,14 @@ async function init() {
   // выполнения квеста — забегает из дверного проёма, прыгает на свой табурет, сидит,
   // убегает. Появление отсюда (центр дверного проёма по Z).
   // sub: 2 — подклеток в клетке, совпадает с SUB в placement.js (общая сетка занятости)
+  // windowFocus — центр оконного проёма дальней стены: на него кот смотрит, сидя на табурете
+  const winSurf = getWallSurfaces(GRID_COLS, GRID_ROWS)[0];
+  const winCut = winSurf.cutouts[0];
   const cat = createCat({
     scene,
     doorPoint: { x: -GRID_COLS / 2 + 0.5, z: DOOR_CENTER_Z },
     cols: GRID_COLS, rows: GRID_ROWS, sub: 2,
+    windowFocus: { x: (winCut.alongMin + winCut.alongMax) / 2, z: winSurf.plane },
   });
 
   // Рендерер — рисует сцену в <canvas> на странице
