@@ -27,7 +27,9 @@ function applyConcreteFloor(floor, cols, rows) {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(cols / 2.5, rows / 2.5); // один «лист» бетона ~2.5×2.5 клетки
+      // Один «лист» бетона на весь пол — повтор не виден (на полу клоны паттерна
+      // бросались в глаза). rows/cols по Z сохраняет квадратные пропорции пятен.
+      texture.repeat.set(1, rows / cols);
       floor.material.map = texture;
       floor.material.color.set(0xffffff); // белый, чтобы не тонировать текстуру
       floor.material.needsUpdate = true;
