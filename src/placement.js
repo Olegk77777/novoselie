@@ -166,9 +166,10 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
   }
 
   // Привязка к сетке 0.5 и зажатие, чтобы предмет целиком влез в стену.
-  // У предметов с fixedWallHeight (розетка у пола) высота не меняется.
+  // У предметов с fixedWallHeight (розетка у пола) высота не меняется;
+  // у предметов с fixedAlong (шторы) положение вдоль стены тоже фиксировано.
   function clampWall(surface, along, height) {
-    const a = Math.round(along * 2) / 2;
+    const a = def.fixedAlong != null ? def.fixedAlong : Math.round(along * 2) / 2;
     const h = def.fixedWallHeight != null ? def.fixedWallHeight : Math.round(height * 2) / 2;
     return {
       along: THREE.MathUtils.clamp(a, surface.alongMin + wallHalf.along, surface.alongMax - wallHalf.along),
@@ -176,12 +177,15 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
     };
   }
 
-  // Свободно ли место: не пересекает вырезы (окно/дверь) и другие настенные предметы
+  // Свободно ли место: не пересекает вырезы (окно/дверь) и другие настенные предметы.
+  // Шторы (overWindow) специально вешаются ПОВЕРХ окна — для них вырезы не помеха.
   function wallRectFree(surface, along, height) {
     const aMin = along - wallHalf.along, aMax = along + wallHalf.along;
     const hMin = height - wallHalf.h, hMax = height + wallHalf.h;
-    for (const c of surface.cutouts) {
-      if (aMin < c.alongMax && aMax > c.alongMin && hMin < c.hMax && hMax > c.hMin) return false;
+    if (!def.overWindow) {
+      for (const c of surface.cutouts) {
+        if (aMin < c.alongMax && aMax > c.alongMin && hMin < c.hMax && hMax > c.hMin) return false;
+      }
     }
     for (const it of placedItems) {
       const w = it.userData.wall;
@@ -193,6 +197,17 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
 
   // Переставить призрак вдоль стены под курсором
   function updateWallGhost(event) {
+    // Шторы и прочие fixed-предметы не ездят за курсором — всегда на своей точке.
+    if (def.fixedAlong != null) {
+      const s = wallSurfaces.find((w) => w.id === def.fixedWall) || wallSurfaces[0];
+      const { along, height } = clampWall(s, def.fixedAlong, def.fixedWallHeight ?? s.heightMax / 2);
+      const free = wallRectFree(s, along, height);
+      wallState = { surface: s, along, height, free };
+      ghost.position.copy(wallWorldPos(s, along, height));
+      targetRotY = s.rotationY;
+      tintGhost(free);
+      return;
+    }
     const hit = wallHitFromEvent(event);
     if (!hit) return; // мимо стен — призрак остаётся где был
     const { along, height } = clampWall(hit.surface, hit.along, hit.height);
@@ -205,6 +220,11 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
 
   // Первое свободное место на стене — для дефолтной позиции при взятии предмета
   function findDefaultWallSpot() {
+    // Предмет, привязанный к одной точке (шторы над окном) — всегда туда
+    if (def.fixedAlong != null) {
+      const s = wallSurfaces.find((w) => w.id === def.fixedWall) || wallSurfaces[0];
+      return { surface: s, along: def.fixedAlong, height: def.fixedWallHeight ?? s.heightMax / 2 };
+    }
     for (const s of wallSurfaces) {
       // У предметов с фикс. высотой перебираем только её
       const heights = [];

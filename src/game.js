@@ -3,17 +3,17 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=43';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=43';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=43';
-import { MODEL_BUILDERS, createDebrisField } from './items.js?v=43';
-import { createPlacement } from './placement.js?v=43';
-import { createUI } from './ui.js?v=43';
-import { renderItemIcon } from './icon.js?v=43';
-import { createPower } from './power.js?v=43';
-import { evaluateCombos } from './combos.js?v=43';
-import { isQuestDone } from './quests.js?v=43';
-import { createCat } from './cat.js?v=43';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=44';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=44';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=44';
+import { MODEL_BUILDERS, createDebrisField } from './items.js?v=44';
+import { createPlacement } from './placement.js?v=44';
+import { createUI } from './ui.js?v=44';
+import { renderItemIcon } from './icon.js?v=44';
+import { createPower } from './power.js?v=44';
+import { evaluateCombos } from './combos.js?v=44';
+import { isQuestDone } from './quests.js?v=44';
+import { createCat } from './cat.js?v=44';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -155,10 +155,21 @@ async function init() {
   // 0 очков уюта: шкала закрывается и без него (если место свободно — задания нет вовсе).
   let catSpotBlocked = false;
 
+  let housewarmingShown = false; // поздравление при полной шкале показываем один раз
   function refreshComfort() {
     const comboSum = comboResults.filter((c) => c.active).reduce((s, c) => s + c.bonus, 0);
-    ui.setComfort(placementComfort + renoComfort + questComfort + comboSum);
+    const total = placementComfort + renoComfort + questComfort + comboSum;
+    ui.setComfort(total);
     ui.setCombos(comboResults);
+    // Вся шкала уюта закрылась — большой поздравительный модал (новоселье состоялось)
+    if (!housewarmingShown && total >= maxComfort) {
+      housewarmingShown = true;
+      ui.showModal(
+        t(locale, 'ui.housewarming_text'),
+        t(locale, 'ui.housewarming_kicker'),
+        t(locale, 'ui.housewarming_ok')
+      );
+    }
   }
 
   // === Квесты: активны первые 2 невыполненных, выполнение — навсегда ===
