@@ -173,7 +173,9 @@ void main(){
     float d2 = dot(q, q);
     float body = exp(-d2 * 11.0) * ragged;  // широкое мягкое гало
     float core = exp(-d2 * 42.0);           // тугое ядро → bloom
-    col += poolCol * (body * 0.46 + core * 0.95) * glowMul;
+    // Приглушено (фидбек Олега): ядро больше НЕ выжигается в белый — синий канал poolCol=1.0
+    // раньше уходил >1 и bloom добивал до пересвета. Теперь фонарь мягко СВЕТИТСЯ сквозь мглу.
+    col += poolCol * (body * 0.28 + core * 0.55) * glowMul;
   }
   // лужа 2 (справа, ниже окна)
   {
@@ -184,7 +186,7 @@ void main(){
     float d2 = dot(q, q);
     float body = exp(-d2 * 15.0) * ragged;
     float core = exp(-d2 * 52.0);
-    col += poolCol * (body * 0.40 + core * 0.80) * glowMul;
+    col += poolCol * (body * 0.26 + core * 0.48) * glowMul;
   }
   // лужа 3 (выше, слабее — «дальний фонарь во дворе»)
   {
@@ -195,7 +197,7 @@ void main(){
     float d2 = dot(q, q);
     float body = exp(-d2 * 18.0) * ragged;
     float core = exp(-d2 * 60.0);
-    col += poolCol * (body * 0.30 + core * 0.58) * glowMul;
+    col += poolCol * (body * 0.20 + core * 0.38) * glowMul;
   }
 
   // ====== финальная расчистка: к чистому void-градиенту ======
