@@ -95,8 +95,10 @@ float fbm3(vec2 p){
   #define TREE_NB 5
 #endif
 
-// покрытие отрезка a-b с конусной толщиной (wa у a, wb у b). x домножен на aspect,
-// чтобы ветка была одинаково толстой по обеим осям.
+// РАЗМЫТАЯ мягкая «тень» отрезка a-b с конусной толщиной (wa у a, wb у b). x домножен
+// на aspect (одинаковая толщина по обеим осям). Не чёткая линия, а широкое перо: коэффициент
+// размытия большой + абсолютный минимум, чтобы даже тонкие прутья оставались мягкими — силуэт
+// абстрактный, как тень в тумане, а не графичный контур.
 float seg(vec2 uv, float aspect, vec2 a, vec2 b, float wa, float wb){
   vec2 P = vec2(uv.x*aspect, uv.y);
   vec2 A = vec2(a.x*aspect, a.y);
@@ -105,7 +107,8 @@ float seg(vec2 uv, float aspect, vec2 a, vec2 b, float wa, float wb){
   float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
   float d = length(pa - ba * h);
   float w = mix(wa, wb, h);
-  return smoothstep(w, w * 0.35, d);
+  float blur = max(w * 3.2, 0.012);          // широкое перо + минимум размытия
+  return (1.0 - smoothstep(0.0, blur, d)) * 0.9;
 }
 
 // силуэт одного дерева; base — комель (низ кадра), H — высота, seed — вариация,
@@ -274,19 +277,24 @@ void main(){
     col += poolCol * (body * 0.20 + core * 0.38) * glowMul;
   }
 
-  // ====== ЛИМБО-ДЕРЕВЬЯ: качающиеся голые силуэты в тумане ======
-  // только тени; живут в дымке — тают при расчистке (uClear) и у самого низа кадра
-  // (там нарисована комната). Дальнее дерево бледнее и тонет в мгле — воздушная перспектива.
+  // ====== ЛИМБО-ДЕРЕВЬЯ: размытые тени, прячущиеся в мгле ======
+  // не чёткие силуэты, а абстрактные тени — мягкое перо (seg), низкий контраст и плавающая
+  // маска тумана, которая «съедает» куски кроны (местами проступает, местами тонет в мгле).
+  // Тают при расчистке (uClear) и у самого низа кадра (там нарисована комната).
   float wind  = sin(uTime*0.20) + 0.5*sin(uTime*0.53 + 1.7);
   float trees = oneTree(uv, uAspect, vec2(0.11, -0.02), 1.18, 1.0, wind,       uTime);
   trees = max(trees, oneTree(uv, uAspect, vec2(0.90, -0.02), 0.98, 2.0, wind*0.85, uTime + 13.0));
 #ifndef LOW_END
   trees = max(trees, oneTree(uv, uAspect, vec2(0.63, -0.02), 0.74, 3.0, wind*1.10, uTime + 7.0));
 #endif
-  float treeVis  = (1.0 - 0.92*clear) * smoothstep(0.0, 0.16, uv.y);
-  vec3  treeDark = vec3(0.012, 0.017, 0.030);                          // почти чёрный, холодный
-  vec3  treeCol  = mix(treeDark, base*0.62, smoothstep(0.25, 0.98, uv.y) * 0.7); // верх растворяется
-  col = mix(col, treeCol, clamp(trees, 0.0, 1.0) * treeVis * 0.9);
+  // плавающая мгла прячет часть кроны (никогда не до нуля — дерево «дышит» в тумане)
+  float mistMask = fbm2(uv * vec2(2.0*uAspect, 2.0) + vec2(uTime*0.018, -uTime*0.012));
+  float hide = mix(0.22, 1.0, smoothstep(0.18, 0.72, mistMask));
+  float treeVis  = (1.0 - 0.92*clear) * smoothstep(0.0, 0.18, uv.y) * hide;
+  // низкий контраст: темнее мглы, но НЕ чёрный; кверху почти сливается с цветом тумана
+  vec3  treeDark = vec3(0.020, 0.026, 0.044);
+  vec3  treeCol  = mix(treeDark, base*0.74, smoothstep(0.0, 0.92, uv.y) * 0.85);
+  col = mix(col, treeCol, clamp(trees, 0.0, 1.0) * treeVis * 0.55);
 
   // ====== финальная расчистка: к чистому void-градиенту ======
   col = mix(col, base, clear * 0.6);
