@@ -7,19 +7,19 @@
 //   игнорируется) — значит плавное появление не сработало бы на iPad. Усиление через
 //   GainNode работает везде, поэтому плавность делаем им.
 //
-// Почему музыка стартует не сразу при загрузке, а по первому касанию экрана:
-//   браузеры запрещают автозапуск звука, пока пользователь ничего не нажал. Первый
-//   клик в игре — кнопка приветствия, на него и заводим музыку (см. start()).
+// Почему музыка НЕ заводится сама при загрузке:
+//   браузеры (особенно Safari) запрещают звук, пока пользователь явно не нажал кнопку.
+//   Поэтому в начале игры показываем выбор «Со звуком / Без звука» (game.js), и звук
+//   включается ИМЕННО кликом по «Со звуком» — этот клик и есть нужный жест. enable()
+//   надо вызывать прямо из обработчика клика (внутри жеста), иначе play() не пустят.
 
 export function createMusic({ t, tracks }) {
   // Фоновая громкость: негромко — музыка должна быть атмосферой, а не давить.
   const TARGET_VOLUME = 0.5;
-  // За сколько секунд музыка плавно набирает громкость со старта (чтобы «не била по ушам»).
+  // За сколько секунд музыка плавно набирает громкость в самый первый раз («не бьёт по ушам»).
   const FADE_IN_SEC = 8;
-  // Короткое плавное затухание/нарастание при выключении/включении звука кнопкой.
+  // Более короткое плавное затухание/нарастание при выключении/включении звука кнопкой.
   const FADE_TOGGLE_SEC = 0.7;
-  // Ключ, под которым запоминаем выбор «звук выключен» между запусками игры.
-  const MUTE_KEY = 'novoselie_muted';
 
   // Один элемент <audio> на текущий трек: грузим по одному (не все шесть сразу),
   // чтобы старт игры был лёгким. Следующий подгружается, когда текущий доиграл.
@@ -48,12 +48,25 @@ export function createMusic({ t, tracks }) {
     audio.play().catch(() => {});
   });
 
-  // Web Audio создаём лениво — только при первом касании (внутри жеста пользователя),
-  // иначе браузер держит контекст «спящим».
+  // Web Audio создаём лениво — только при первом включении (внутри жеста пользователя),
+  // иначе браузер держит контекст «спящим» и звук не пойдёт.
   let ctx = null;
   let gain = null;
-  let started = false;
-  let muted = localStorage.getItem(MUTE_KEY) === '1';
+  let built = false;     // граф Web Audio уже собран?
+  let firstPlay = true;  // первый запуск (длинный fade-in) или последующий (короткий)?
+  let muted = false;     // звук выключен пользователем?
+
+  function buildGraph() {
+    if (built) return;
+    built = true;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return; // совсем старый браузер — тихо выходим, игра работает без музыки
+    ctx = new AudioCtx();
+    const source = ctx.createMediaElementSource(audio);
+    gain = ctx.createGain();
+    gain.gain.value = 0; // стартуем из полной тишины — её поднимет fade-in
+    source.connect(gain).connect(ctx.destination);
+  }
 
   // Плавно ведём громкость к value за seconds секунд (линейная рампа усиления).
   function ramp(value, seconds) {
@@ -64,22 +77,25 @@ export function createMusic({ t, tracks }) {
     gain.gain.linearRampToValueAtTime(value, now + seconds);
   }
 
-  // Запуск музыки. Вызывается на первом касании/нажатии (жест пользователя), один раз.
-  // Если звук выключен в прошлый раз — готовим всё, но молчим до нажатия кнопки.
-  function start() {
-    if (started) return;
-    started = true;
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return; // совсем старый браузер — тихо выходим, игра работает без музыки
-    ctx = new AudioCtx();
-    const source = ctx.createMediaElementSource(audio);
-    gain = ctx.createGain();
-    gain.gain.value = 0; // стартуем из полной тишины — её поднимет fade-in
-    source.connect(gain).connect(ctx.destination);
+  // Включить звук. ВАЖНО: вызывать прямо из клика (жест) — иначе браузер не пустит play().
+  function enable() {
+    muted = false;
+    buildGraph();
+    ctx?.resume?.();
+    const dur = firstPlay ? FADE_IN_SEC : FADE_TOGGLE_SEC;
+    firstPlay = false;
+    audio.play().then(() => ramp(TARGET_VOLUME, dur)).catch(() => {});
+    refreshBtn();
+  }
 
-    if (muted) return; // звук выключен пользователем ранее — не играем
-    ctx.resume?.();
-    audio.play().then(() => ramp(TARGET_VOLUME, FADE_IN_SEC)).catch(() => {});
+  // Выключить звук: плавно гасим и ставим на паузу (если уже играло).
+  function disable() {
+    muted = true;
+    if (built) {
+      ramp(0, FADE_TOGGLE_SEC);
+      setTimeout(() => { if (muted) audio.pause(); }, FADE_TOGGLE_SEC * 1000 + 50);
+    }
+    refreshBtn();
   }
 
   // Кнопка «звук»: тонкая стеклянная плитка в углу (рядом с «глазом» любования).
@@ -103,21 +119,9 @@ export function createMusic({ t, tracks }) {
     btn.setAttribute('aria-label', btn.title);
   }
   refreshBtn();
-
-  btn.addEventListener('click', () => {
-    muted = !muted;
-    localStorage.setItem(MUTE_KEY, muted ? '1' : '0');
-    refreshBtn();
-    if (!started) { start(); return; } // ещё не заводили — пусть start решит, играть ли
-    if (muted) {
-      ramp(0, FADE_TOGGLE_SEC);
-      setTimeout(() => { if (muted) audio.pause(); }, FADE_TOGGLE_SEC * 1000 + 50);
-    } else {
-      ctx?.resume?.();
-      audio.play().then(() => ramp(TARGET_VOLUME, FADE_TOGGLE_SEC)).catch(() => {});
-    }
-  });
+  btn.addEventListener('click', () => { if (muted) enable(); else disable(); });
   document.body.appendChild(btn);
 
-  return { start };
+  // enable/disable дёргает game.js из модала выбора «Со звуком / Без звука».
+  return { enable, disable };
 }

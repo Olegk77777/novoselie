@@ -3,21 +3,21 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=60';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=60';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=60';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=60';
-import { createPlacement } from './placement.js?v=60';
-import { createUI } from './ui.js?v=60';
-import { renderItemIcon } from './icon.js?v=60';
-import { createPower } from './power.js?v=60';
-import { evaluateCombos } from './combos.js?v=60';
-import { isQuestDone } from './quests.js?v=60';
-import { createCat } from './cat.js?v=60';
-import { createLighting } from './lighting.js?v=60';
-import { createBloom } from './bloom.js?v=60';
-import { createFog } from './fog.js?v=60';
-import { createMusic } from './music.js?v=60';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=61';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=61';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=61';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=61';
+import { createPlacement } from './placement.js?v=61';
+import { createUI } from './ui.js?v=61';
+import { renderItemIcon } from './icon.js?v=61';
+import { createPower } from './power.js?v=61';
+import { evaluateCombos } from './combos.js?v=61';
+import { isQuestDone } from './quests.js?v=61';
+import { createCat } from './cat.js?v=61';
+import { createLighting } from './lighting.js?v=61';
+import { createBloom } from './bloom.js?v=61';
+import { createFog } from './fog.js?v=61';
+import { createMusic } from './music.js?v=61';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -579,11 +579,7 @@ async function init() {
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateReservedLeft);
 
   // === Фоновая музыка: думерский плейлист с очень плавным появлением ===
-  // Браузер не пускает звук, пока игрок ничего не нажал, поэтому заводим музыку по
-  // ПЕРВОМУ касанию/нажатию (обычно это кнопка приветствия). Громкость поднимается
-  // от нуля за несколько секунд — старт мягкий, не бьёт по ушам. Кнопку выключения
-  // звука модуль рисует сам (в углу рядом с «глазом» любования). { once: true } —
-  // слушатель срабатывает один раз и снимается.
+  // Кнопку выключения звука модуль рисует сам (в углу рядом с «глазом» любования).
   const music = createMusic({
     t: (key) => t(locale, key),
     tracks: [
@@ -595,13 +591,23 @@ async function init() {
       'audio/snowfall_tape.mp3',
     ],
   });
-  const startMusic = () => music.start();
-  window.addEventListener('pointerdown', startMusic, { once: true });
-  window.addEventListener('keydown', startMusic, { once: true });
 
-  // Приветствие — первый модал при входе (думерское, с первыми делами).
-  // Закрыл приветствие → на несколько секунд загораются стрелки над кучами мусора
-  // (подсказка для новичка, что первый шаг — убрать мусор).
+  // Первый модал — ВЫБОР ЗВУКА. Так надо не по дизайну, а по необходимости: браузеры
+  // (особенно Safari) пускают звук только в ответ на явный клик. Клик по «Со звуком» и
+  // есть тот жест — музыка плавно появляется прямо под текстом приветствия. «Без звука»
+  // — играть в тишине (звук потом можно включить кнопкой в углу).
+  ui.showChoice({
+    text: t(locale, 'ui.sound_prompt_text'),
+    kicker: t(locale, 'ui.sound_prompt_kicker'),
+    okLabel: t(locale, 'ui.sound_prompt_on'),
+    altLabel: t(locale, 'ui.sound_prompt_off'),
+    onOk: () => music.enable(),   // клик = жест → звук точно заведётся, мягкий fade-in
+    onAlt: () => music.disable(), // играем без звука
+  });
+
+  // Приветствие — показывается ВТОРЫМ, сразу после выбора звука (думерское, с первыми
+  // делами). Закрыл приветствие → на несколько секунд загораются стрелки над кучами
+  // мусора (подсказка для новичка, что первый шаг — убрать мусор).
   ui.showModal(
     t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'),
     showDebrisArrows

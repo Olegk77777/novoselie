@@ -60,7 +60,15 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
   const modalOk = document.createElement('button');
   modalOk.className = 'ui-modal-ok';
   modalOk.textContent = t('ui.ok');
-  modalCard.append(modalKicker, modalText, modalOk);
+  // Необязательная вторая кнопка — для модала-ВЫБОРА (напр. «Со звуком / Без звука»).
+  // По умолчанию скрыта: обычные модалы остаются с одной кнопкой.
+  const modalAlt = document.createElement('button');
+  modalAlt.className = 'ui-modal-ok ui-modal-alt';
+  modalAlt.style.display = 'none';
+  const modalButtons = document.createElement('div');
+  modalButtons.className = 'ui-modal-buttons';
+  modalButtons.append(modalOk, modalAlt);
+  modalCard.append(modalKicker, modalText, modalButtons);
   modalOverlay.appendChild(modalCard);
   document.body.appendChild(modalOverlay);
 
@@ -70,11 +78,13 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
       modalOverlay.hidden = true;
       return;
     }
-    const { text, kicker, okLabel } = modalQueue[0];
+    const { text, kicker, okLabel, altLabel } = modalQueue[0];
     modalKicker.textContent = kicker || '';
     modalKicker.style.display = kicker ? '' : 'none';
     modalText.textContent = text;
     modalOk.textContent = okLabel || t('ui.ok');
+    modalAlt.textContent = altLabel || '';
+    modalAlt.style.display = altLabel ? '' : 'none';
     // Зелёный вариант — «задание выполнено» (кикер с галочкой)
     modalCard.classList.toggle('done', !!kicker && kicker.includes('✓'));
     modalOverlay.hidden = false;
@@ -85,7 +95,13 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
   modalOk.addEventListener('click', () => {
     const closed = modalQueue.shift();
     showNextModal();
-    if (closed && closed.onClose) closed.onClose(); // напр.: показать стрелки на мусор
+    if (closed && closed.onClose) closed.onClose(); // напр.: показать стрелки на мусор / включить звук
+  });
+  // Вторая кнопка модала-выбора (напр. «Без звука»)
+  modalAlt.addEventListener('click', () => {
+    const closed = modalQueue.shift();
+    showNextModal();
+    if (closed && closed.onAlt) closed.onAlt();
   });
 
   // Левая колонка: шкала уюта + журнал заданий
@@ -282,6 +298,12 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
     // onClose — необязательный колбэк, вызывается при закрытии ИМЕННО этого модала.
     showModal(text, kicker, okLabel, onClose) {
       modalQueue.push({ text, kicker, okLabel, onClose });
+      if (modalQueue.length === 1) showNextModal();
+    },
+    // Модал-ВЫБОР с двумя кнопками. onOk — основная (амбер), onAlt — вторая (приглушённая).
+    // Используется для выбора звука при старте; клик по кнопке = жест (нужен Safari для звука).
+    showChoice({ text, kicker, okLabel, altLabel, onOk, onAlt }) {
+      modalQueue.push({ text, kicker, okLabel, onClose: onOk, altLabel, onAlt });
       if (modalQueue.length === 1) showNextModal();
     },
     // Обновляет список активных бонусов (results — из combos.js)
