@@ -3,23 +3,23 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=79';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=79';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=79';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=79';
-import { createPlacement } from './placement.js?v=79';
-import { createUI } from './ui.js?v=79';
-import { renderItemIcon } from './icon.js?v=79';
-import { createPower } from './power.js?v=79';
-import { evaluateCombos } from './combos.js?v=79';
-import { isQuestDone } from './quests.js?v=79';
-import { createCat } from './cat.js?v=79';
-import { createLighting } from './lighting.js?v=79';
-import { createHeightFog } from './heightfog.js?v=79';
-import { createBloom } from './bloom.js?v=79';
-import { createFog } from './fog.js?v=79';
-import { createMusic } from './music.js?v=79';
-import { createCinema } from './cinema.js?v=79';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=80';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=80';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=80';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=80';
+import { createPlacement } from './placement.js?v=80';
+import { createUI } from './ui.js?v=80';
+import { renderItemIcon } from './icon.js?v=80';
+import { createPower } from './power.js?v=80';
+import { evaluateCombos } from './combos.js?v=80';
+import { isQuestDone } from './quests.js?v=80';
+import { createCat } from './cat.js?v=80';
+import { createLighting } from './lighting.js?v=80';
+import { createHeightFog } from './heightfog.js?v=80';
+import { createBloom } from './bloom.js?v=80';
+import { createFog } from './fog.js?v=80';
+import { createMusic } from './music.js?v=80';
+import { createCinema } from './cinema.js?v=80';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -128,6 +128,17 @@ async function init() {
   let fogClear = 0;        // текущая степень расчистки (плавно догоняет цель)
   let fogClearTarget = 0;  // цель: доля уюта × 0.35 (туман редеет, но не исчезает)
 
+  // Плоский список анимируемых объектов (у кого есть userData.tick): пыль, аквариум, ТВ,
+  // лава-лампа, свеча, штора и т.д. Раньше кадровый цикл обходил ВЕСЬ граф сцены
+  // (scene.traverse — сотни боксов обставленной комнаты) только чтобы найти эту горстку.
+  // Набор tick-объектов меняется ТОЛЬКО когда что-то ставят/снимают или идёт ремонт —
+  // поэтому пересобираем список по событию (rebuildTickables), а в кадре просто бежим по нему.
+  let tickables = [];
+  const rebuildTickables = () => {
+    tickables = [];
+    scene.traverse((o) => { if (o.userData.tick) tickables.push(o); });
+  };
+
   // Кот-житель: бонус за квест «табурет у окна». Создаётся скрытым, оживает после
   // выполнения квеста — забегает из дверного проёма, прыгает на свой табурет, сидит,
   // убегает. Появление отсюда (центр дверного проёма по Z).
@@ -143,7 +154,7 @@ async function init() {
   });
 
   // Рендерер — рисует сцену в <canvas> на странице
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   // Лимит pixelRatio = 2: на ретина-iPad без лимита рисуем вчетверо больше пикселей с
   // тенями — главный убийца fps. 2 достаточно для резкости.
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -375,6 +386,7 @@ async function init() {
 
   function recompute(placedItems) {
     lastLayout = placedItems;
+    rebuildTickables(); // поставили/забрали предмет — пересобрать список анимируемых
     // Воздушная дымка на новой мебели (идемпотентно: уже одетые материалы пропускаются).
     // Делаем на смене расстановки — действие игрока, не каждый кадр.
     for (const it of placedItems) heightFog.applyTo(it);
@@ -442,6 +454,7 @@ async function init() {
     if (def.applies === 'window') {
       windowGlass = applyWindow(walls, GRID_COLS, GRID_ROWS);
       heightFog.applyTo(walls); // одеть раму окна (Lambert) дымкой; стекло-шейдер пропустится
+      rebuildTickables(); // окно/шторы могли добавить анимируемые узлы — обновить список
       renoDone.window = true;
       renoComfort += def.comfort || 0;
       ui.changeCount(def.id, -1);
@@ -702,9 +715,22 @@ async function init() {
   // Главный цикл: перерисовываем сцену каждый кадр
   const clock = new THREE.Clock();
   let lastTime = 0;
+  rebuildTickables(); // первичный список (пыль, мусор и пр. уже в сцене)
+
+  // Потолок 60 fps. На ProMotion-дисплеях (Mac/iPad, 120 Гц) браузер зовёт цикл 120 раз/сек —
+  // это ВДВОЕ больше работы (основной рендер + 6 проходов bloom + перерисовка шейдеров окна и
+  // тумана), при картинке, которую глаз в статичной думерской сцене не отличает от 60. Гейт
+  // пропускает каждый второй кадр на 120 Гц. Слак −0.001 с — чтобы на честных 60 Гц не срезать
+  // до 30. Вся анимация привязана к time/dt-сглаживанию: кадров вдвое меньше, dt вдвое больше —
+  // вид по времени тот же. Это главный выигрыш аудита (см. PROGRESS).
+  const FRAME_MIN = 1 / 60 - 0.001;
+  let lastRender = -1;
+  const cinemaBloom = { strength: 0, threshold: 0, tint: null }; // переиспользуем — без аллокации в кадре
   renderer.setAnimationLoop(() => {
-    placement.update(); // плавный доворот предмета «в руке»
     const time = clock.getElapsedTime();
+    if (time - lastRender < FRAME_MIN) return; // не чаще 60 раз/сек
+    lastRender = time;
+    placement.update(); // плавный доворот предмета «в руке»
     const dt = time - lastTime; // секунд с прошлого кадра
     lastTime = time;
     updateCameraAnim(dt); // плавный «переезд» комнаты (режим любования)
@@ -739,14 +765,14 @@ async function init() {
     // Режим любования: свечение еле «дышит» в фазе с зум-бризом. Копируем объект — lighting
     // переиспользует bloomState и пересчитывает его раз в 4 кадра, мутировать на месте нельзя.
     if (document.body.classList.contains('cinema')) {
-      bloomParams = {
-        strength: bloomParams.strength * (1 + 0.06 * Math.sin(time / 17.3)),
-        threshold: bloomParams.threshold,
-        tint: bloomParams.tint,
-      };
+      cinemaBloom.strength = bloomParams.strength * (1 + 0.06 * Math.sin(time / 17.3));
+      cinemaBloom.threshold = bloomParams.threshold;
+      cinemaBloom.tint = bloomParams.tint;
+      bloomParams = cinemaBloom; // мутируем переиспользуемый объект, не создаём новый каждый кадр
     }
-    // Анимированные предметы (аквариум: вода, рыбки, пузырьки) — у кого есть tick
-    scene.traverse((o) => { if (o.userData.tick) o.userData.tick(time); });
+    // Анимированные предметы (аквариум: вода, рыбки, пузырьки) — по плоскому списку,
+    // без обхода всего графа сцены каждый кадр (см. rebuildTickables)
+    for (let i = 0; i < tickables.length; i++) tickables[i].userData.tick(time);
     // Стрелки на мусор: качаются и мягко мигают, плавно гаснут через несколько секунд
     if (arrowsActive) {
       if (arrowsShownAt < 0) arrowsShownAt = time;

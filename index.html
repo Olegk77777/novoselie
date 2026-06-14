@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=79">
-  <link rel="stylesheet" href="design/type.css?v=79">
+  <link rel="stylesheet" href="design/colors.css?v=80">
+  <link rel="stylesheet" href="design/type.css?v=80">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -704,9 +704,11 @@
       background: url('textures/grain_overlay.png') repeat;
       background-size: 128px 128px;
       mix-blend-mode: overlay;
-      animation: cine-grain 0.72s step-end infinite;
     }
-    body.cinema #cine-grain { opacity: 0.07; }
+    /* Зерно «кипит» только в режиме любования. Вне его слой невидим (opacity:0), но
+       анимировать полноэкранный blend-слой весь сеанс — впустую грузить композитор браузера
+       (правка перф-аудита). Картинка идентична: вне cinema зерно и так не видно. */
+    body.cinema #cine-grain { opacity: 0.07; animation: cine-grain 0.72s step-end infinite; }
     /* На слабом железе зерно статично (без перерисовки полноэкранного блендового слоя). */
     body.cine-lowend #cine-grain { animation: none; }
     @keyframes cine-grain {
@@ -741,8 +743,9 @@
     .cine-rec {
       color: #d8553e;
       text-shadow: 0 0 7px rgba(216, 85, 62, 0.6);
-      animation: cine-blink 1.3s step-end infinite;
     }
+    /* Мигание ●REC — только в режиме любования (OSD скрыт вне него), иначе мигаем впустую. */
+    body.cinema .cine-rec { animation: cine-blink 1.3s step-end infinite; }
     @keyframes cine-blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0.15; } }
 
     /* Тихая титульная строка на входе — fade-in → hold → fade-out (один прогон). */
@@ -854,6 +857,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=79"></script>
+  <script type="module" src="src/game.js?v=80"></script>
 </body>
 </html>

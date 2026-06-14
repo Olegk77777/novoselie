@@ -1141,7 +1141,7 @@ export function createTV() {
     // Телевизор работает только при наличии тока (game.js ставит userData.powered)
     const on = !!g.userData.powered;
     tvUniforms.uOn.value = on ? 1.0 : 0.0;
-    if (!on) { wasOn = false; started = false; tvLight.intensity = 0; return; } // нет тока — тёмное стекло
+    if (!on) { wasOn = false; started = false; tvLight.intensity = 0; tvLight.visible = false; return; } // нет тока — тёмное стекло (visible=false убирает свет из шейдерного цикла)
     if (!started) { started = true; nextSwitch = t + 6 + Math.random() * 5; nextDropout = t + 4 + Math.random() * 8; }
     if (!wasOn) { staticUntil = t + 0.4; wasOn = true; }  // только что включился — миг прогрева (помехи)
     if (t >= nextSwitch) {
@@ -1158,6 +1158,7 @@ export function createTV() {
     }
     tvUniforms.uStatic.value = t < staticUntil ? 1.0 : 0.0;
     // мерцание света по «кадрам» + всплеск на помехах (смена канала/снег)
+    tvLight.visible = true;
     tvLight.intensity = 1.7 + 0.5 * Math.sin(t * 9.0) + (t < staticUntil ? 1.0 : 0);
   };
   return g;
@@ -1302,6 +1303,7 @@ export function createFloorLamp() {
   // Яркий: это ГЛАВНЫЙ тёплый источник, контрастирующий с холодным полумраком (Хоппер).
   g.userData.tick = (t) => {
     const on = !!g.userData.powered;
+    lamp.visible = on; // погашенный источник исключается из шейдерного цикла освещения
     lamp.intensity = on ? 4.8 * (0.97 + 0.03 * Math.sin(t * 2.0)) : 0; // лёгкое «дыхание» накала
     shadeMat.emissive.setHex(on ? 0x8a5a26 : 0x141008);
   };
@@ -1358,7 +1360,7 @@ export function createTapePlayer() {
     eqUniforms.uTime.value = t;
     const on = g.userData.powered ? 1.0 : 0.0;
     eqUniforms.uOn.value = on; // аквалайзер горит только при наличии тока
-    if (eqLight) eqLight.intensity = on ? 0.55 + 0.08 * Math.sin(t * 6.0) : 0; // лёгкое мерцание под музыку
+    if (eqLight) { eqLight.visible = on > 0; eqLight.intensity = on ? 0.55 + 0.08 * Math.sin(t * 6.0) : 0; } // мерцание; visible=false убирает свет из цикла
   };
   return g;
 }
@@ -1498,6 +1500,7 @@ export function createAquarium() {
     waterMat.uniforms.uTime.value = tt;
     waterMat.uniforms.uOn.value = on ? 1.0 : 0.0;
     lampMat.emissive.setHex(on ? 0xffcf80 : 0x080808); // подсветка под крышкой гаснет
+    aqLight.visible = on; // погашенный источник исключается из шейдерного цикла освещения
     aqLight.intensity = on ? 1.1 + 0.15 * Math.sin(animT * 0.8) : 0; // дыхание от animT (замирает без тока)
     for (const f of fishes) {
       const p = f.userData.p;
@@ -1638,10 +1641,13 @@ export function createCandle() {
 // Собственный PointLight красится тем же оттенком — комната наполняется
 // завораживающим иридесцентным светом, который мягко «дышит» (см. tick).
 // Палитра света (JS-двойник шейдерной pal()) — для синхронного цвета источника.
+const _lavaRGB = [0, 0, 0]; // переиспользуемый буфер — tick зовёт lavaPalette каждый кадр
 function lavaPalette(t) {
   const TAU = Math.PI * 2;
-  const a = [0.55, 0.40, 0.45], b = [0.45, 0.40, 0.45], d = [0.0, 0.20, 0.45];
-  return [0, 1, 2].map((i) => Math.max(0, a[i] + b[i] * Math.cos(TAU * (t + d[i]))));
+  _lavaRGB[0] = Math.max(0, 0.55 + 0.45 * Math.cos(TAU * (t + 0.0)));
+  _lavaRGB[1] = Math.max(0, 0.40 + 0.40 * Math.cos(TAU * (t + 0.20)));
+  _lavaRGB[2] = Math.max(0, 0.45 + 0.45 * Math.cos(TAU * (t + 0.45)));
+  return _lavaRGB; // результат сразу потребляется (setRGB) — переиспользование безопасно
 }
 
 export function createLavaLamp() {

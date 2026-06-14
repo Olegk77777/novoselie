@@ -570,19 +570,24 @@ vec4 cityLayer(vec2 uv, float layer, float baseY, float blockW,
   float wseed = hash(wcell + bi*17.0 + layer*3.0);
   float litChance = mix(0.30, 0.62, density) * (0.55 + 0.45*near);
   float lit = step(1.0 - litChance, wseed);
-  // «Кто-то не спит»: малая часть окон (~3.5%) РЕДКО и МЯГКО переключается вкл/выкл (раз в
-  // ~24 c, плавный переход ~1.2 c, фаза своя у каждого окна) — двор населён, но без резкого
-  // мельтешения. Заряжает финал про «огни, что светят кому-то, кто дома». Пара hash — дёшево.
-  float toggleWin = step(0.965, hash(wcell*1.3 + bi*5.0 + 41.0));
-  float tph = uTime/24.0 + wseed*7.0;
-  float curOn  = step(0.5, hash1(floor(tph) + wseed*23.0));
-  float prevOn = step(0.5, hash1(floor(tph) - 1.0 + wseed*23.0));
-  float toggleOn = mix(prevOn, curOn, smoothstep(0.0, 0.05, fract(tph))); // мягкий переход
-  lit = mix(lit, toggleOn, toggleWin);
-  float flick = 0.92 + 0.08*sin(uTime*1.7 + wseed*40.0);
   // редкий «синий телевизор» — реже и медленнее, чтобы не было строб-эффекта
   float tvWin = step(0.94, hash(wcell + 91.0));
-  float tvFlick = 0.6 + 0.4*sin(uTime*3.0 + wseed*12.0);
+  float flick = 1.0, tvFlick = 1.0; // дефолты для дня (когда окна не горят)
+  // Анимация окон города (мерцание накала, «синий телевизор», «кто-то не спит») — ТОЛЬКО ночью.
+  // Днём nightF=0 → winNight = lit*nightF = 0 → вклад окон ноль независимо от мерцания, а ~12
+  // sin/hash на пиксель фасада считались бы впустую (правка перф-аудита; идиома как для звёзд).
+  // «Кто-то не спит»: малая часть окон (~3.5%) РЕДКО и МЯГКО переключается вкл/выкл (раз в ~24 c,
+  // плавный переход ~1.2 c) — двор населён, без мельтешения; заряжает финал про «огни, что светят».
+  if (nightF > 0.01) {
+    float toggleWin = step(0.965, hash(wcell*1.3 + bi*5.0 + 41.0));
+    float tph = uTime/24.0 + wseed*7.0;
+    float curOn  = step(0.5, hash1(floor(tph) + wseed*23.0));
+    float prevOn = step(0.5, hash1(floor(tph) - 1.0 + wseed*23.0));
+    float toggleOn = mix(prevOn, curOn, smoothstep(0.0, 0.05, fract(tph))); // мягкий переход
+    lit = mix(lit, toggleOn, toggleWin);
+    flick = 0.92 + 0.08*sin(uTime*1.7 + wseed*40.0);
+    tvFlick = 0.6 + 0.4*sin(uTime*3.0 + wseed*12.0);
+  }
   vec3 warm = vec3(1.00,0.74,0.38);
   vec3 tv   = vec3(0.40,0.52,0.72);   // приглушённый холодный, в палитре
   vec3 winLight = mix(warm, tv, tvWin);
@@ -901,13 +906,17 @@ void main() {
   // редкие вспышки молнии — осенью (и чуть весной), зимой/летом почти нет
   float stormSeason = sw.x + sw.z * 0.5;
   float strongRain = smoothstep(0.6, 0.95, rain);
-  float ltn = t * 0.16;
-  float lseg = floor(ltn);
-  float strike = step(0.82, hash1(lseg + 41.0));
-  float lph = fract(ltn);
-  float flash = strike * exp(-lph * 26.0) * (0.65 + 0.35 * sin(lph * 130.0)) * strongRain * stormSeason;
-  float skyHi = 0.45 + 0.6 * smoothstep(0.0, 0.7, uv.y);
-  col += vec3(0.72, 0.80, 1.0) * max(flash, 0.0) * skyHi * 0.82;
+  // Молнию (exp + sin + hash на КАЖДОМ пикселе) считаем только в грозу — без неё
+  // strongRain*stormSeason=0 и вспышка всё равно даёт ноль (правка перф-аудита, идиома как у капель).
+  if (strongRain * stormSeason > 0.001) {
+    float ltn = t * 0.16;
+    float lseg = floor(ltn);
+    float strike = step(0.82, hash1(lseg + 41.0));
+    float lph = fract(ltn);
+    float flash = strike * exp(-lph * 26.0) * (0.65 + 0.35 * sin(lph * 130.0)) * strongRain * stormSeason;
+    float skyHi = 0.45 + 0.6 * smoothstep(0.0, 0.7, uv.y);
+    col += vec3(0.72, 0.80, 1.0) * max(flash, 0.0) * skyHi * 0.82;
+  }
 
   // косой блик на стекле (в ливень приглушаем)
   col += vec3(0.6,0.65,0.7) * smoothstep(0.02, 0.0, abs((uv.x - uv.y) + 0.18)) * 0.12 * (1.0 - rain * 0.5);
