@@ -175,7 +175,7 @@ export function applyWindow(wallsGroup, cols, rows) {
     new THREE.PlaneGeometry(w, h),
     new THREE.ShaderMaterial({
       transparent: true,
-      uniforms: { uTime: { value: 0 }, uAspect: { value: w / h } },
+      uniforms: { uTime: { value: 0 }, uAspect: { value: w / h }, uCinema: { value: 0 } },
       vertexShader: `
         varying vec2 vUv;
         void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
@@ -184,6 +184,7 @@ export function applyWindow(wallsGroup, cols, rows) {
 precision highp float;
 uniform float uTime;
 uniform float uAspect;   // ширина/высота окна (~2.31) — чтобы круглое было круглым
+uniform float uCinema;   // 0..1 — режим любования (запотевание стекла), плавно из game.js
 varying vec2 vUv;
 
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -564,6 +565,12 @@ vec4 cityLayer(vec2 uv, float layer, float baseY, float blockW,
   float wseed = hash(wcell + bi*17.0 + layer*3.0);
   float litChance = mix(0.30, 0.62, density) * (0.55 + 0.45*near);
   float lit = step(1.0 - litChance, wseed);
+  // «Кто-то не спит»: малая часть окон (~5%) медленно переключается вкл/выкл (раз в ~19 c,
+  // фаза своя у каждого окна) — мёртвый задник становится населённым двором. Заряжает финал
+  // про «огни, что светят кому-то, кто дома». Чистая арифметика, две hash — почти бесплатно.
+  float toggleWin = step(0.95, hash(wcell*1.3 + bi*5.0 + 41.0));
+  float toggleOn = step(0.5, hash1(floor(uTime/19.0 + wseed*7.0) + wseed*23.0));
+  lit = mix(lit, toggleOn, toggleWin);
   float flick = 0.92 + 0.08*sin(uTime*1.7 + wseed*40.0);
   // редкий «синий телевизор» — реже и медленнее, чтобы не было строб-эффекта
   float tvWin = step(0.94, hash(wcell + 91.0));
@@ -868,6 +875,20 @@ void main() {
   float fyf = smoothstep(0.85, 0.05, uv.y);
   float swirl = 0.82 + 0.18 * sin(uv.x * 5.0 - t * 0.18 + uv.y * 4.0);
   col = mix(col, fogCol, fog * (0.34 + 0.55 * fyf) * swirl);
+
+  // КОНДЕНСАТ на стекле — только в режиме любования (uCinema). Тёплая комната против
+  // холодного стекла: запотевание гуще у краёв и низа, центр «дышит» прозрачнее. Зимой
+  // плотнее. Дёшево — без циклов, пара синусов; держим ниже порога bloom (не вспыхивает).
+  if (uCinema > 0.001) {
+    vec2 cp = vec2(uv.x * uAspect, uv.y);
+    float mist = clamp(0.55 + 0.25 * sin(cp.x * 3.1 + t * 0.06) + 0.20 * sin(cp.y * 3.7 - t * 0.05 + 1.3), 0.0, 1.0);
+    float edges = smoothstep(0.30, 0.03, uv.x) + smoothstep(0.70, 0.97, uv.x)
+                + smoothstep(0.34, 0.0, uv.y) + 0.5 * smoothstep(0.82, 1.0, uv.y);
+    float center = smoothstep(0.14, 0.46, length((uv - vec2(0.5, 0.54)) * vec2(uAspect * 0.5, 1.0)));
+    float cond = clamp(mist * 0.32 + edges * 0.5, 0.0, 1.0) * center * uCinema * (0.55 + 0.6 * snowF);
+    vec3 mistCol = mix(vec3(0.58, 0.62, 0.70), vec3(0.20, 0.23, 0.31), nightF);
+    col = mix(col, mistCol, clamp(cond, 0.0, 0.72) * 0.7);
+  }
 
   // редкие вспышки молнии — осенью (и чуть весной), зимой/летом почти нет
   float stormSeason = sw.x + sw.z * 0.5;

@@ -3,22 +3,22 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=65';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=65';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=65';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=65';
-import { createPlacement } from './placement.js?v=65';
-import { createUI } from './ui.js?v=65';
-import { renderItemIcon } from './icon.js?v=65';
-import { createPower } from './power.js?v=65';
-import { evaluateCombos } from './combos.js?v=65';
-import { isQuestDone } from './quests.js?v=65';
-import { createCat } from './cat.js?v=65';
-import { createLighting } from './lighting.js?v=65';
-import { createBloom } from './bloom.js?v=65';
-import { createFog } from './fog.js?v=65';
-import { createMusic } from './music.js?v=65';
-import { createCinema } from './cinema.js?v=65';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=66';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=66';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=66';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=66';
+import { createPlacement } from './placement.js?v=66';
+import { createUI } from './ui.js?v=66';
+import { renderItemIcon } from './icon.js?v=66';
+import { createPower } from './power.js?v=66';
+import { evaluateCombos } from './combos.js?v=66';
+import { isQuestDone } from './quests.js?v=66';
+import { createCat } from './cat.js?v=66';
+import { createLighting } from './lighting.js?v=66';
+import { createBloom } from './bloom.js?v=66';
+import { createFog } from './fog.js?v=66';
+import { createMusic } from './music.js?v=66';
+import { createCinema } from './cinema.js?v=66';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -79,6 +79,20 @@ async function init() {
     cards: [t(locale, 'cinema.card_1'), t(locale, 'cinema.card_2'), t(locale, 'cinema.card_3')],
     osdLabel: t(locale, 'cinema.osd_rec'),
     osdDate: t(locale, 'cinema.osd_date'),
+    // Дрейф точки внимания: камера медленно «замечает» окно, тёплые приборы, кота — как
+    // засыпающий взгляд хозяина. Точки берём из текущей расстановки (вызывается на смене якоря).
+    getFocusAnchors: () => {
+      const a = [{ x: (winCut.alongMin + winCut.alongMax) / 2, z: winSurf.plane }]; // окно — душа кадра
+      const warm = new Set(['floor_lamp', 'tv', 'aquarium', 'lava_lamp']);
+      for (const it of lastLayout) {
+        if (warm.has(it.userData?.def?.id)) a.push({ x: it.position.x, z: it.position.z });
+      }
+      if (isCatActive()) {
+        const stool = catTargetStool();
+        if (stool) a.push({ x: stool.position.x, z: stool.position.z });
+      }
+      return a;
+    },
   });
 
   // Свет: эстетика Хоппера / Limbo-в-цвете. Главное заполнение — ОТ ОКНА (холодное),
@@ -668,7 +682,13 @@ async function init() {
     updateCameraAnim(dt); // плавный «переезд» комнаты (режим любования)
     cinema.update(dt, time); // дыхание/параллакс камеры в режиме любования (пишет zoom последним)
     // Окно «живёт»: сутки за окном идут по кругу (день → закат → ночь → рассвет)
-    if (windowGlass) windowGlass.uniforms.uTime.value = time;
+    if (windowGlass) {
+      windowGlass.uniforms.uTime.value = time;
+      // Режим любования: запотевание стекла плавно появляется/уходит (uCinema 0↔1).
+      const cur = windowGlass.uniforms.uCinema.value;
+      const tgt = document.body.classList.contains('cinema') ? 1 : 0;
+      windowGlass.uniforms.uCinema.value = cur + (tgt - cur) * (1 - Math.pow(0.02, Math.min(Math.max(dt, 0), 0.1)));
+    }
     // Туман-фон: дышит во времени; рассеивается плавно (экспоненциальное сглаживание,
     // не зависящее от fps — расчистка читается как анимация, а не скачок).
     fogClear += (fogClearTarget - fogClear) * (1 - Math.pow(0.06, Math.min(Math.max(dt, 0), 0.1)));

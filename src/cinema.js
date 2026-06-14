@@ -21,7 +21,7 @@
 
 import * as THREE from 'three';
 
-export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, osdDate }) {
+export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, osdDate, getFocusAnchors }) {
   // База орбиты = исходная поза камеры из camera.js: позиция (10, 10+targetY, 10), смотрит в
   // (0, targetY, 0). R и азимут A0 описывают её в полярных координатах вокруг центра комнаты.
   const R = Math.hypot(10, 10);
@@ -33,6 +33,16 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
   const A_ORBIT = THREE.MathUtils.degToRad(1.5) * M; // свинг азимута (даёт параллакс)
   const A_BOB = 0.04 * M;                            // вертикальное оседание кадра (heave)
   const A_ZOOM = 0.025 * M;                          // зум-бриз ±2.5%
+
+  // Дрейф точки внимания: камера медленно «наводится» на окно / тёплый прибор / кота и
+  // держит якорь ~46 c. Пан мягкий (доля пути к якорю), чтобы комната не уезжала за кадр.
+  const DRIFT = 0.32 * M;       // доля пути к якорю
+  const FOCUS_ZOOM = 0.05 * M;  // лёгкий наезд при наводке на предмет
+  const HOLD = 46;              // секунд на одном якоре
+  let anchors = [];
+  let anchorIdx = 0;
+  let switchT = 0;
+  const pivot = { x: 0, z: 0 }; // текущее смещение взгляда (мир), плавно догоняет якорь
 
   let weight = 0;       // 0 = игровая поза, 1 = полное дыхание; рампится плавно
   let active = false;   // включён ли режим
@@ -132,6 +142,10 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
     active = true;
     settled = false;
     lastSec = -1;
+    // Якоря дрейфа берём из текущей расстановки; начинаем с окна (первый в списке).
+    anchors = getFocusAnchors ? (getFocusAnchors() || []) : [];
+    anchorIdx = 0;
+    switchT = 0;
     // Титульная строка: выбираем одну (псевдослучайно по времени) и перезапускаем анимацию.
     if (cardLines.length) {
       card.textContent = cardLines[Math.floor(Math.abs(Math.sin(performance.now())) * cardLines.length) % cardLines.length];
@@ -177,12 +191,36 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
     }
     settled = false;
 
+    // Дрейф точки внимания: раз в HOLD секунд берём следующий якорь (обновляя список —
+    // вдруг игрок что-то переставил). Цель пана — доля пути к якорю, зажата, чтобы не уехать.
+    let tx = 0, tz = 0;
+    if (active) {
+      switchT += d;
+      if (switchT >= HOLD) {
+        switchT = 0;
+        if (getFocusAnchors) anchors = getFocusAnchors() || [];
+        anchorIdx = anchors.length ? (anchorIdx + 1) % anchors.length : 0;
+      }
+      if (anchors.length) {
+        const an = anchors[anchorIdx % anchors.length];
+        tx = Math.max(-1.6, Math.min(1.6, an.x * DRIFT));
+        tz = Math.max(-1.6, Math.min(1.6, an.z * DRIFT));
+      }
+    }
+    // плавная наводка взгляда к якорю (медленно, ~3 c) — экспоненциальное сглаживание
+    const pk = 1 - Math.pow(0.7, d);
+    pivot.x += (tx - pivot.x) * pk;
+    pivot.z += (tz - pivot.z) * pk;
+
     const w = weight;
     const az = A0 + A_ORBIT * Math.sin(time / 29.0) * w;       // орбита (азимут) → параллакс
     const bob = A_BOB * Math.sin(time / 23.5) * w;             // оседание кадра без наклона
-    camera.position.set(R * Math.cos(az), 10 + targetY + bob, R * Math.sin(az));
-    camera.lookAt(0, targetY + bob, 0);
-    const zMul = 1 + A_ZOOM * w * (0.6 * Math.sin(time / 17.3) + 0.4 * Math.sin(time / 41.0));
+    const px = pivot.x * w, pz = pivot.z * w;                  // пан к точке внимания (×weight)
+    camera.position.set(R * Math.cos(az) + px, 10 + targetY + bob, R * Math.sin(az) + pz);
+    camera.lookAt(px, targetY + bob, pz);                      // сдвиг eye+target = чистый пан, угол тот же
+    const focusMag = Math.min(1, Math.hypot(pivot.x, pivot.z) / 1.5);
+    const zMul = (1 + A_ZOOM * w * (0.6 * Math.sin(time / 17.3) + 0.4 * Math.sin(time / 41.0)))
+               * (1 + FOCUS_ZOOM * w * focusMag);              // лёгкий наезд при наводке
     camera.zoom = getBaseZoom() * zMul;                        // пишем зум ПОСЛЕДНИМ за кадр
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld(true);

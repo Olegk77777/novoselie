@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=65">
-  <link rel="stylesheet" href="design/type.css?v=65">
+  <link rel="stylesheet" href="design/colors.css?v=66">
+  <link rel="stylesheet" href="design/type.css?v=66">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -669,8 +669,10 @@
     }
     #cine-bar-top { top: 0; }
     #cine-bar-bottom { bottom: 0; }
+    /* Соотношение 2.0:1 (Univisium) — кино-рамка, но полосы заметно тоньше 2.40:1,
+       меньше съедают комнату. max(0,…) — на портретном окне высота не уходит в минус. */
     body.cinema #cine-bar-top,
-    body.cinema #cine-bar-bottom { height: max(0px, calc((100vh - 100vw / 2.4) / 2)); }
+    body.cinema #cine-bar-bottom { height: max(0px, calc((100vh - 100vw / 2.0) / 2)); }
 
     /* Общая база плёночных слоёв */
     #cine-grade, #cine-vignette, #cine-grain {
@@ -794,6 +796,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=65"></script>
+  <script type="module" src="src/game.js?v=66"></script>
 </body>
 </html>
