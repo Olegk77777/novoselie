@@ -84,6 +84,80 @@ float fbm3(vec2 p){
   return s / 0.875;
 }
 
+// ============================ ЛИМБО-ДЕРЕВЬЯ ============================
+// Голые качающиеся силуэты в тумане-фоне (без листьев) — «тени» в духе Limbo.
+// Только тёмные силуэты: ствол + ветки + прутья из отрезков-SDF; гнутся по ветру
+// (верхушка сильнее комля). Читаются на фоне дымки и фонарных луж, тонут в мгле.
+// Дёшево: пара десятков отрезков, ноль текстур; на iPad (LOW_END) меньше веток и без прутьев.
+#ifdef LOW_END
+  #define TREE_NB 3
+#else
+  #define TREE_NB 5
+#endif
+
+// покрытие отрезка a-b с конусной толщиной (wa у a, wb у b). x домножен на aspect,
+// чтобы ветка была одинаково толстой по обеим осям.
+float seg(vec2 uv, float aspect, vec2 a, vec2 b, float wa, float wb){
+  vec2 P = vec2(uv.x*aspect, uv.y);
+  vec2 A = vec2(a.x*aspect, a.y);
+  vec2 B = vec2(b.x*aspect, b.y);
+  vec2 pa = P - A, ba = B - A;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+  float d = length(pa - ba * h);
+  float w = mix(wa, wb, h);
+  return smoothstep(w, w * 0.35, d);
+}
+
+// силуэт одного дерева; base — комель (низ кадра), H — высота, seed — вариация,
+// wind — общий знакопеременный порыв ветра, t — время.
+float oneTree(vec2 uv, float aspect, vec2 base, float H, float seed, float wind, float t){
+  float cov  = 0.0;
+  float ts   = H / 1.1;                                          // толщина пропорц. размеру
+  float lean = (hash(vec2(seed, 3.7)) - 0.5) * 0.10;             // постоянный наклон
+  float bend = wind * 0.020 + sin(t * 0.6 + seed * 6.2) * 0.006; // амплитуда качания
+
+  // ствол ломаной: S-извилина + наклон + ветер (к верхушке сильнее, h*h)
+  float hp = 0.0; vec2 prev = base;
+  for (int i = 1; i <= 5; i++){
+    float h = float(i) / 5.0;
+    float x = base.x + lean*H*h + sin(h*2.6 + seed*4.0)*0.016*H + bend*h*h*H;
+    vec2 cur = vec2(x, base.y + H*h);
+    cov = max(cov, seg(uv, aspect, prev, cur,
+                       mix(0.016, 0.0035, hp)*ts, mix(0.016, 0.0035, h)*ts));
+    prev = cur; hp = h;
+  }
+
+  // ветки вверх-наружу от точек на стволе + по два прутика с конца
+  for (int k = 0; k < TREE_NB; k++){
+    float fk = float(k);
+    float s  = hash(vec2(seed, fk + 11.0));
+    float s2 = hash(vec2(seed*1.7, fk + 4.0));
+    float ht = 0.34 + 0.60 * (fk + s) / float(TREE_NB);          // высота крепления
+    float x  = base.x + lean*H*ht + sin(ht*2.6 + seed*4.0)*0.016*H + bend*ht*ht*H;
+    vec2  a  = vec2(x, base.y + H*ht);
+    float side = (fract(s2*3.0) < 0.5) ? -1.0 : 1.0;
+    float ang  = mix(1.05, 0.42, ht) * (0.7 + 0.6*s);            // у макушки круче вверх
+    float len  = H * mix(0.30, 0.11, ht) * (0.7 + 0.7*s2);
+    float tipB = bend * (0.7 + ht) + sin(t*1.1 + seed*9.0 + fk) * 0.004; // кончик дрожит сильнее
+    vec2  dir  = vec2(side*sin(ang), cos(ang));
+    vec2  b    = a + dir*len + vec2(side*tipB*H, 0.0);
+    cov = max(cov, seg(uv, aspect, a, b, 0.0060*ts, 0.0022*ts));
+#ifndef LOW_END
+    for (int j = 0; j < 2; j++){
+      float fj = float(j);
+      float sj = hash(vec2(seed + fk, fj + 21.0));
+      float aj = ang + (fj < 0.5 ? -1.0 : 1.0) * (0.35 + 0.45*sj);
+      float lj = len * (0.45 + 0.30*sj);
+      float tj = tipB * 1.7 + sin(t*1.6 + sj*12.0) * 0.004;
+      vec2  dj = vec2(side*sin(aj), cos(aj));
+      vec2  c  = b + dj*lj + vec2(side*tj*H, 0.0);
+      cov = max(cov, seg(uv, aspect, b, c, 0.0026*ts, 0.0011*ts));
+    }
+#endif
+  }
+  return cov;
+}
+
 void main(){
   vec2 uv = vUv;
   vec2 cz = uv - 0.5; // смещение от центра кадра для микропараллакса на зуме
@@ -199,6 +273,20 @@ void main(){
     float core = exp(-d2 * 60.0);
     col += poolCol * (body * 0.20 + core * 0.38) * glowMul;
   }
+
+  // ====== ЛИМБО-ДЕРЕВЬЯ: качающиеся голые силуэты в тумане ======
+  // только тени; живут в дымке — тают при расчистке (uClear) и у самого низа кадра
+  // (там нарисована комната). Дальнее дерево бледнее и тонет в мгле — воздушная перспектива.
+  float wind  = sin(uTime*0.20) + 0.5*sin(uTime*0.53 + 1.7);
+  float trees = oneTree(uv, uAspect, vec2(0.11, -0.02), 1.18, 1.0, wind,       uTime);
+  trees = max(trees, oneTree(uv, uAspect, vec2(0.90, -0.02), 0.98, 2.0, wind*0.85, uTime + 13.0));
+#ifndef LOW_END
+  trees = max(trees, oneTree(uv, uAspect, vec2(0.63, -0.02), 0.74, 3.0, wind*1.10, uTime + 7.0));
+#endif
+  float treeVis  = (1.0 - 0.92*clear) * smoothstep(0.0, 0.16, uv.y);
+  vec3  treeDark = vec3(0.012, 0.017, 0.030);                          // почти чёрный, холодный
+  vec3  treeCol  = mix(treeDark, base*0.62, smoothstep(0.25, 0.98, uv.y) * 0.7); // верх растворяется
+  col = mix(col, treeCol, clamp(trees, 0.0, 1.0) * treeVis * 0.9);
 
   // ====== финальная расчистка: к чистому void-градиенту ======
   col = mix(col, base, clear * 0.6);
