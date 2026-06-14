@@ -3,23 +3,23 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=80';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=80';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=80';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=80';
-import { createPlacement } from './placement.js?v=80';
-import { createUI } from './ui.js?v=80';
-import { renderItemIcon } from './icon.js?v=80';
-import { createPower } from './power.js?v=80';
-import { evaluateCombos } from './combos.js?v=80';
-import { isQuestDone } from './quests.js?v=80';
-import { createCat } from './cat.js?v=80';
-import { createLighting } from './lighting.js?v=80';
-import { createHeightFog } from './heightfog.js?v=80';
-import { createBloom } from './bloom.js?v=80';
-import { createFog } from './fog.js?v=80';
-import { createMusic } from './music.js?v=80';
-import { createCinema } from './cinema.js?v=80';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=81';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=81';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=81';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=81';
+import { createPlacement } from './placement.js?v=81';
+import { createUI } from './ui.js?v=81';
+import { renderItemIcon } from './icon.js?v=81';
+import { createPower } from './power.js?v=81';
+import { evaluateCombos } from './combos.js?v=81';
+import { isQuestDone } from './quests.js?v=81';
+import { createCat } from './cat.js?v=81';
+import { createLighting } from './lighting.js?v=81';
+import { createHeightFog } from './heightfog.js?v=81';
+import { createBloom } from './bloom.js?v=81';
+import { createFog } from './fog.js?v=81';
+import { createMusic } from './music.js?v=81';
+import { createCinema } from './cinema.js?v=81';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -154,7 +154,9 @@ async function init() {
   });
 
   // Рендерер — рисует сцену в <canvas> на странице
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  // antialias только на НЕ-ретине (dpr<2). На ретине/iPad плотность 2× и так сглаживает
+  // диагонали, а MSAA поверх неё — постоянный налог на пропускную способность GPU (перф-аудит).
+  const renderer = new THREE.WebGLRenderer({ antialias: window.devicePixelRatio < 2, powerPreference: 'high-performance' });
   // Лимит pixelRatio = 2: на ретина-iPad без лимита рисуем вчетверо больше пикселей с
   // тенями — главный убийца fps. 2 достаточно для резкости.
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -717,18 +719,26 @@ async function init() {
   let lastTime = 0;
   rebuildTickables(); // первичный список (пыль, мусор и пр. уже в сцене)
 
-  // Потолок 60 fps. На ProMotion-дисплеях (Mac/iPad, 120 Гц) браузер зовёт цикл 120 раз/сек —
-  // это ВДВОЕ больше работы (основной рендер + 6 проходов bloom + перерисовка шейдеров окна и
-  // тумана), при картинке, которую глаз в статичной думерской сцене не отличает от 60. Гейт
-  // пропускает каждый второй кадр на 120 Гц. Слак −0.001 с — чтобы на честных 60 Гц не срезать
-  // до 30. Вся анимация привязана к time/dt-сглаживанию: кадров вдвое меньше, dt вдвое больше —
-  // вид по времени тот же. Это главный выигрыш аудита (см. PROGRESS).
-  const FRAME_MIN = 1 / 60 - 0.001;
+  // Адаптивный потолок fps. Игра созерцательная: В ПОКОЕ держим 30 fps — это кинематографично
+  // и вдвое холоднее (на ProMotion родные 120 Гц = вчетверо больше работы, чем нужно). НО ядро
+  // геймплея — расстановка: пока игрок ТАЩИТ предмет / зумит / крутит, нужна отзывчивость, поэтому
+  // на ~0.6 с после любого ввода поднимаем до 60 fps (предмет липко следует за пальцем/курсором).
+  // Камера в режиме любования дышит медленно — 30 хватает. Вся анимация привязана к time/dt:
+  // разное число кадров даёт тот же вид по времени. Это главный выигрыш аудита (см. PROGRESS).
+  const FRAME_60 = 1 / 60 - 0.001; // активный ввод — плавно
+  const FRAME_30 = 1 / 30 - 0.001; // покой — холодно и кинематографично
+  const INTERACT_WINDOW = 0.6;     // секунд держим 60 fps после последнего ввода
   let lastRender = -1;
+  let lastInteract = -10;
+  const bumpInteract = () => { lastInteract = clock.getElapsedTime(); }; // ввод → окно 60 fps
+  renderer.domElement.addEventListener('pointermove', bumpInteract, { passive: true });
+  renderer.domElement.addEventListener('pointerdown', bumpInteract, { passive: true });
+  renderer.domElement.addEventListener('wheel', bumpInteract, { passive: true });
   const cinemaBloom = { strength: 0, threshold: 0, tint: null }; // переиспользуем — без аллокации в кадре
   renderer.setAnimationLoop(() => {
     const time = clock.getElapsedTime();
-    if (time - lastRender < FRAME_MIN) return; // не чаще 60 раз/сек
+    const minFrame = (time - lastInteract < INTERACT_WINDOW) ? FRAME_60 : FRAME_30; // 60 при вводе, иначе 30
+    if (time - lastRender < minFrame) return;
     lastRender = time;
     placement.update(); // плавный доворот предмета «в руке»
     const dt = time - lastTime; // секунд с прошлого кадра

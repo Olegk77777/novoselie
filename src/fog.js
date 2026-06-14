@@ -55,8 +55,11 @@ uniform float uZoom;   // 0.6..3.0, 1.0 — норма (микропаралла
 uniform float uClear;  // 0 = полный туман, 1 = мгла отступила
 varying vec2 vUv;      // экранные координаты 0..1
 
-// дешёвый хэш — как в оконном шейдере walls.js
-float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// дешёвый хэш БЕЗ sin (Dave Hoskins hash12). sin — самый дорогой ALU-оператор, а хэш зовётся
+// ~130 раз на пиксель (шум облаков + лужи + деревья) — замена на fract-хэш заметно холоднее
+// (перф-аудит). Сидирует шумовое поле иначе, чем прежний sin-хэш: клубы и силуэты деревьев лягут
+// по-другому, но эстетика (мягкое перо seg + контраст) не меняется.
+float hash(vec2 p){ vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 
 // value-noise: 4 угла клетки + smoothstep-интерполяция (4 hash/вызов)
 float vnoise(vec2 p){
@@ -316,7 +319,7 @@ uniform float uZoom;
 uniform float uClear;
 varying vec2 vUv;
 
-float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float hash(vec2 p){ vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 
 float vnoise(vec2 p){
   vec2 i = floor(p);
