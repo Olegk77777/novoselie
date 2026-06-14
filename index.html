@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=59">
-  <link rel="stylesheet" href="design/type.css?v=59">
+  <link rel="stylesheet" href="design/colors.css?v=60">
+  <link rel="stylesheet" href="design/type.css?v=60">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -75,15 +75,47 @@
     /* Глаз «горит» кремовым, когда мы в режиме любования */
     #ui-cinema.watching { color: var(--text-cream); }
 
+    /* === Кнопка «Звук» — выключить/включить фоновую музыку === */
+    /* Та же стеклянная плитка, что и «глаз», стоит слева от него (right: 66px). */
+    #ui-sound {
+      position: fixed;
+      top: 14px;
+      right: 66px;
+      z-index: 6;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      background: linear-gradient(160deg, var(--panel-glass), var(--panel-glass-2));
+      border: 1px solid var(--panel-stroke);
+      border-radius: var(--r-btn);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.4);
+      color: var(--amber);
+      cursor: pointer;
+      opacity: 0.8;
+      transition: opacity 0.45s ease, color 0.3s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    #ui-sound svg { width: 24px; height: 24px; display: block; }
+    #ui-sound:hover {
+      opacity: 1;
+      border-color: var(--amber);
+      box-shadow: 0 0 14px rgba(232, 185, 106, 0.3);
+    }
+    /* Звук выключен — иконка гаснет до приглушённого серого */
+    #ui-sound.muted { color: var(--text-muted); }
+
     /* Плавное появление/исчезновение элементов HUD */
-    #ui-left, #ui-top, #ui-bottom, #ui-hint-toast {
+    #ui-left, #ui-top, #ui-bottom, #ui-hint-toast, #ui-sound {
       transition: opacity 0.5s ease;
     }
     /* Режим любования: прячем весь HUD, оставляем лишь приглушённый глаз */
     body.cinema #ui-left,
     body.cinema #ui-top,
     body.cinema #ui-bottom,
-    body.cinema #ui-hint-toast {
+    body.cinema #ui-hint-toast,
+    body.cinema #ui-sound {
       opacity: 0;
       pointer-events: none;
     }
@@ -625,6 +657,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=59"></script>
+  <script type="module" src="src/game.js?v=60"></script>
 </body>
 </html>

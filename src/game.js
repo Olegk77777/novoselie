@@ -3,20 +3,21 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=59';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=59';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=59';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=59';
-import { createPlacement } from './placement.js?v=59';
-import { createUI } from './ui.js?v=59';
-import { renderItemIcon } from './icon.js?v=59';
-import { createPower } from './power.js?v=59';
-import { evaluateCombos } from './combos.js?v=59';
-import { isQuestDone } from './quests.js?v=59';
-import { createCat } from './cat.js?v=59';
-import { createLighting } from './lighting.js?v=59';
-import { createBloom } from './bloom.js?v=59';
-import { createFog } from './fog.js?v=59';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=60';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=60';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=60';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=60';
+import { createPlacement } from './placement.js?v=60';
+import { createUI } from './ui.js?v=60';
+import { renderItemIcon } from './icon.js?v=60';
+import { createPower } from './power.js?v=60';
+import { evaluateCombos } from './combos.js?v=60';
+import { isQuestDone } from './quests.js?v=60';
+import { createCat } from './cat.js?v=60';
+import { createLighting } from './lighting.js?v=60';
+import { createBloom } from './bloom.js?v=60';
+import { createFog } from './fog.js?v=60';
+import { createMusic } from './music.js?v=60';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -576,6 +577,27 @@ async function init() {
   updateReservedLeft();
   // Шрифты грузятся асинхронно — ширина колонки может измениться, пересчитаем
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateReservedLeft);
+
+  // === Фоновая музыка: думерский плейлист с очень плавным появлением ===
+  // Браузер не пускает звук, пока игрок ничего не нажал, поэтому заводим музыку по
+  // ПЕРВОМУ касанию/нажатию (обычно это кнопка приветствия). Громкость поднимается
+  // от нуля за несколько секунд — старт мягкий, не бьёт по ушам. Кнопку выключения
+  // звука модуль рисует сам (в углу рядом с «глазом» любования). { once: true } —
+  // слушатель срабатывает один раз и снимается.
+  const music = createMusic({
+    t: (key) => t(locale, key),
+    tracks: [
+      'audio/grey_concrete_echo.mp3',
+      'audio/concrete_haze.mp3',
+      'audio/concrete_winter.mp3',
+      'audio/concrete_fog.mp3',
+      'audio/rain_on_glass.mp3',
+      'audio/snowfall_tape.mp3',
+    ],
+  });
+  const startMusic = () => music.start();
+  window.addEventListener('pointerdown', startMusic, { once: true });
+  window.addEventListener('keydown', startMusic, { once: true });
 
   // Приветствие — первый модал при входе (думерское, с первыми делами).
   // Закрыл приветствие → на несколько секунд загораются стрелки над кучами мусора
