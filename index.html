@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=68">
-  <link rel="stylesheet" href="design/type.css?v=68">
+  <link rel="stylesheet" href="design/colors.css?v=69">
+  <link rel="stylesheet" href="design/type.css?v=69">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -671,10 +671,12 @@
     }
     #cine-bar-top { top: 0; }
     #cine-bar-bottom { bottom: 0; }
-    /* Соотношение 2.0:1 (Univisium) — кино-рамка, но полосы заметно тоньше 2.40:1,
-       меньше съедают комнату. max(0,…) — на портретном окне высота не уходит в минус. */
+    /* Кино-рамка. Высота полос = «остаток» после вписывания кадра 2.0:1, НО ограничена
+       сверху 7vh: иначе на квадратном экране (iPad 4:3) до 2:1 пришлось бы срезать ~17% высоты
+       (огромные полосы), тогда как на широком ПК (16:9) полосы и так крошечные (~5.5vh).
+       clamp держит их одинаково тонкими везде. На портрете остаток < 0 → clamp даёт 0 (без полос). */
     body.cinema #cine-bar-top,
-    body.cinema #cine-bar-bottom { height: max(0px, calc((100vh - 100vw / 2.0) / 2)); }
+    body.cinema #cine-bar-bottom { height: clamp(0px, calc((100vh - 100vw / 2.0) / 2), 7vh); }
 
     /* Общая база плёночных слоёв */
     #cine-grade, #cine-vignette, #cine-grain {
@@ -798,6 +800,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=68"></script>
+  <script type="module" src="src/game.js?v=69"></script>
 </body>
 </html>
