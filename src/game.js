@@ -3,21 +3,21 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=61';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=61';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=61';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=61';
-import { createPlacement } from './placement.js?v=61';
-import { createUI } from './ui.js?v=61';
-import { renderItemIcon } from './icon.js?v=61';
-import { createPower } from './power.js?v=61';
-import { evaluateCombos } from './combos.js?v=61';
-import { isQuestDone } from './quests.js?v=61';
-import { createCat } from './cat.js?v=61';
-import { createLighting } from './lighting.js?v=61';
-import { createBloom } from './bloom.js?v=61';
-import { createFog } from './fog.js?v=61';
-import { createMusic } from './music.js?v=61';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=62';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=62';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=62';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=62';
+import { createPlacement } from './placement.js?v=62';
+import { createUI } from './ui.js?v=62';
+import { renderItemIcon } from './icon.js?v=62';
+import { createPower } from './power.js?v=62';
+import { evaluateCombos } from './combos.js?v=62';
+import { isQuestDone } from './quests.js?v=62';
+import { createCat } from './cat.js?v=62';
+import { createLighting } from './lighting.js?v=62';
+import { createBloom } from './bloom.js?v=62';
+import { createFog } from './fog.js?v=62';
+import { createMusic } from './music.js?v=62';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -377,10 +377,10 @@ async function init() {
   // Этапы ремонта — тоже задания (показываются в журнале + модал при выполнении).
   // Активен текущий доступный шаг: мусор → окно → (паркет и обои параллельно).
   const renoSteps = [
-    { key: 'debris', textKey: 'reno_task.debris' },
-    { key: 'window', textKey: 'reno_task.window' },
-    { key: 'floor', textKey: 'reno_task.floor' },
-    { key: 'walls', textKey: 'reno_task.walls' },
+    { key: 'debris', textKey: 'reno_task.debris', doneKey: 'reno_task.debris_done' },
+    { key: 'window', textKey: 'reno_task.window', doneKey: 'reno_task.window_done' },
+    { key: 'floor', textKey: 'reno_task.floor', doneKey: 'reno_task.floor_done' },
+    { key: 'walls', textKey: 'reno_task.walls', doneKey: 'reno_task.walls_done' },
   ];
   const renoActive = (key) => {
     if (key === 'debris') return !renoDone.debris;
@@ -392,7 +392,8 @@ async function init() {
   // Модал «выполнено» для этапа ремонта + обновление журнала
   function completeRenoStep(key) {
     const step = renoSteps.find((s) => s.key === key);
-    ui.showModal(t(locale, step.textKey), t(locale, 'ui.quest_done_kicker'));
+    // В журнале шаг — короткое имя (textKey); в модалке «выполнено» — выплата-кадр новеллы (doneKey)
+    ui.showModal(t(locale, step.doneKey || step.textKey), t(locale, 'ui.quest_done_kicker'));
     refreshQuestsUI();
   }
 
