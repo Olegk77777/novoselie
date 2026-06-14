@@ -53,14 +53,18 @@ export function getWallSurfaces(cols, rows) {
   ];
 }
 
-// Создаёт обе стены, окно и проём; возвращает группу для добавления в сцену
-export function createWalls(cols, rows) {
+// Создаёт обе стены, окно и проём; возвращает группу для добавления в сцену.
+// dress(material) — необязательный колбэк: им game.js «одевает» каждый Lambert-материал
+// стен воздушной дымкой (height-fog). Материалы стен заменяются (бетон при старте, обои при
+// ремонте), поэтому dress зовётся на КАЖДЫЙ новый материал, а не один раз снаружи.
+export function createWalls(cols, rows, dress) {
   const group = new THREE.Group();
   const halfW = cols / 2;
   const halfD = rows / 2;
 
   // Общий материал стен; обои клеятся при ремонте (applyWallpaper)
   const wallMaterial = new THREE.MeshLambertMaterial({ color: CONCRETE_COLOR });
+  if (dress) dress(wallMaterial); // дымка на стартовый цвет-заглушку (до загрузки бетона)
 
   // Вспомогалка: добавляет кусок стены (бокс) с центром в (x, y, z).
   // texW/texH — размеры лицевой стороны, по ним потом считается повтор обоев.
@@ -126,7 +130,7 @@ export function createWalls(cols, rows) {
   );
 
   // Одеваем голые стены в бетон (до ремонта). Нет файла — остаётся серый цвет.
-  applyConcrete(group);
+  applyConcrete(group, dress);
 
   return group;
 }
@@ -134,7 +138,7 @@ export function createWalls(cols, rows) {
 // Натягивает текстуру бетона на голые стены при старте (по аналогии с обоями:
 // каждому сегменту своя копия текстуры с повтором под его размер). Файла нет —
 // стены остаются цветом CONCRETE_COLOR, игра не ждёт.
-function applyConcrete(wallsGroup) {
+function applyConcrete(wallsGroup, dress) {
   new THREE.TextureLoader().load(
     'textures/concrete_bare.jpg',
     (texture) => {
@@ -147,6 +151,7 @@ function applyConcrete(wallsGroup) {
         const tex = texture.clone();
         tex.repeat.set(texW / CONCRETE_TILE, texH / CONCRETE_TILE);
         mesh.material = new THREE.MeshLambertMaterial({ map: tex });
+        if (dress) dress(mesh.material); // воздушная дымка на новый материал стены
       });
     },
     undefined,
@@ -947,7 +952,7 @@ void main() {
 // Клеит обои на стены (вызывается при ремонте из game.js).
 // Грузим текстуру один раз, каждому сегменту — своя копия с повтором под его
 // размер, чтобы узор был одного масштаба на кусках разной величины.
-export function applyWallpaper(wallsGroup) {
+export function applyWallpaper(wallsGroup, dress) {
   new THREE.TextureLoader().load(
     'textures/wall_wallpaper.jpg',
     (texture) => {
@@ -960,13 +965,16 @@ export function applyWallpaper(wallsGroup) {
         const tex = texture.clone();
         tex.repeat.set(texW / WALLPAPER_TILE, texH / WALLPAPER_TILE);
         mesh.material = new THREE.MeshLambertMaterial({ map: tex });
+        if (dress) dress(mesh.material); // воздушная дымка на новый материал обоев
       });
     },
     undefined,
     () => {
       // Нет текстуры — красим в тёплую краску, чтобы было видно, что ремонт сделан
       wallsGroup.children.forEach((mesh) => {
-        if (mesh.userData.wallpaper) mesh.material = new THREE.MeshLambertMaterial({ color: 0x9aa07a });
+        if (!mesh.userData.wallpaper) return;
+        mesh.material = new THREE.MeshLambertMaterial({ color: 0x9aa07a });
+        if (dress) dress(mesh.material);
       });
       console.warn('Текстура обоев не найдена (textures/wall_wallpaper.jpg) — стены краской.');
     }

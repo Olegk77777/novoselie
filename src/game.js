@@ -3,22 +3,23 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=74';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=74';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=74';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=74';
-import { createPlacement } from './placement.js?v=74';
-import { createUI } from './ui.js?v=74';
-import { renderItemIcon } from './icon.js?v=74';
-import { createPower } from './power.js?v=74';
-import { evaluateCombos } from './combos.js?v=74';
-import { isQuestDone } from './quests.js?v=74';
-import { createCat } from './cat.js?v=74';
-import { createLighting } from './lighting.js?v=74';
-import { createBloom } from './bloom.js?v=74';
-import { createFog } from './fog.js?v=74';
-import { createMusic } from './music.js?v=74';
-import { createCinema } from './cinema.js?v=74';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=75';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=75';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=75';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=75';
+import { createPlacement } from './placement.js?v=75';
+import { createUI } from './ui.js?v=75';
+import { renderItemIcon } from './icon.js?v=75';
+import { createPower } from './power.js?v=75';
+import { evaluateCombos } from './combos.js?v=75';
+import { isQuestDone } from './quests.js?v=75';
+import { createCat } from './cat.js?v=75';
+import { createLighting } from './lighting.js?v=75';
+import { createHeightFog } from './heightfog.js?v=75';
+import { createBloom } from './bloom.js?v=75';
+import { createFog } from './fog.js?v=75';
+import { createMusic } from './music.js?v=75';
+import { createCinema } from './cinema.js?v=75';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -100,12 +101,19 @@ async function init() {
   // Вся логика в src/lighting.js; оконный свет реагирует на шейдер окна (сутки/сезон/погода).
   const lighting = createLighting(scene, { doorX: -GRID_COLS / 2, doorZ: DOOR_CENTER_Z });
 
+  // Воздушная перспектива (height-fog): дальняя стена и верх углов тонут в холодной дымке
+  // по мировой высоте Y. Пол, сетка и низ мебели остаются чистыми (геймплей не страдает).
+  // heightFog.apply — «одевалка» материала; продеваем её в стены (их материалы заменяются
+  // при ремонте) и в пол. Цвет/плотность дымки задаёт lighting.update() каждый кадр.
+  const heightFog = createHeightFog();
+
   // Пол, сетка, стены. На старте — голый бетон: паркет и обои кладутся при ремонте.
   const floor = createFloor(GRID_COLS, GRID_ROWS);
   floor.receiveShadow = true; // на пол ложатся тени мебели
+  heightFog.apply(floor.material); // материал пола стабилен — одеваем один раз
   scene.add(floor);
   scene.add(createGridLines(GRID_COLS, GRID_ROWS));
-  const walls = createWalls(GRID_COLS, GRID_ROWS);
+  const walls = createWalls(GRID_COLS, GRID_ROWS, heightFog.apply);
   walls.traverse((o) => { if (o.isMesh) o.receiveShadow = true; }); // тени на дальние стены
   scene.add(walls);
 
@@ -367,6 +375,9 @@ async function init() {
 
   function recompute(placedItems) {
     lastLayout = placedItems;
+    // Воздушная дымка на новой мебели (идемпотентно: уже одетые материалы пропускаются).
+    // Делаем на смене расстановки — действие игрока, не каждый кадр.
+    for (const it of placedItems) heightFog.applyTo(it);
     lastConnections = power.update(placedItems);
     // Приборы (ТВ, магнитофон, аквариум) работают только при наличии тока —
     // прокидываем питание в их модели; userData.tick читает это и гасит их без розетки.
@@ -430,6 +441,7 @@ async function init() {
     // Окно: вставляем стекло, открываем паркет и обои
     if (def.applies === 'window') {
       windowGlass = applyWindow(walls, GRID_COLS, GRID_ROWS);
+      heightFog.applyTo(walls); // одеть раму окна (Lambert) дымкой; стекло-шейдер пропустится
       renoDone.window = true;
       renoComfort += def.comfort || 0;
       ui.changeCount(def.id, -1);
@@ -443,7 +455,7 @@ async function init() {
       applyParquet(floor, GRID_COLS, GRID_ROWS);
       renoDone.floor = true;
     } else {
-      applyWallpaper(walls);
+      applyWallpaper(walls, heightFog.apply);
       renoDone.walls = true;
     }
     renoComfort += def.comfort || 0;
@@ -718,6 +730,12 @@ async function init() {
     // времени (день холодный → закат янтарь → ночь тьма + серебро луны → дождь свинец).
     // update() заодно отдаёт параметры Bloom (ярче ночью/в полнолуние).
     let bloomParams = lighting.update(time, !!windowGlass);
+    // Воздушная перспектива: цвет/плотность дымки дальней стены из того же расчёта, что свет
+    // окна (SYNC). hazeColor уже в линейном рабочем пространстве (ColorManagement), врезка в
+    // шейдере идёт до тон-маппинга — конверсия не нужна. Уют слегка проясняет комнату (как
+    // туман-фон fog.js: тот же fogClear). Делаем ДО cinema-пересборки bloomParams (она роняет haze).
+    heightFog.u.uHazeColor.value.copy(bloomParams.hazeColor);
+    heightFog.u.uHazeAmt.value = bloomParams.hazeAmt * (1 - 0.4 * fogClear);
     // Режим любования: свечение еле «дышит» в фазе с зум-бризом. Копируем объект — lighting
     // переиспользует bloomState и пересчитывает его раз в 4 кадра, мутировать на месте нельзя.
     if (document.body.classList.contains('cinema')) {

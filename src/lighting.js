@@ -101,12 +101,21 @@ export function createLighting(scene, opts = {}) {
   const C_MOON_HEMI = new THREE.Color(0x6f86c4); // синий сдвиг рассеянного света в полнолуние
   const HEMI_NIGHT = new THREE.Color(0x515d7e); // ночной полумрак — синеватый, но комната ХОРОШО видна
   const HEMI_DAY = new THREE.Color(0x5e7090);
+  // Воздушная перспектива (height-fog, src/heightfog.js): к этому синему void тянется дымка
+  // дальней стены ночью — он же voidBot из fog.js (#10131f), поэтому комната тонет в ТУ ЖЕ
+  // мглу, что клубится за стенами (бесшовный стык интерьера и фона).
+  const C_HAZE_VOID = new THREE.Color(0x10131f);
   const scratch = new THREE.Color();
   const scratch2 = new THREE.Color();
 
-  // Состояние Bloom — читает game.js каждый кадр и отдаёт в bloom.apply(). Пересчитывается
-  // из времени/луны (ночью и в полнолуние свечение ярче и чуть холоднее = таинственнее).
-  const bloomState = { strength: 0.5, threshold: 0.64, tint: [1, 1, 1] };
+  // Состояние Bloom + воздушной дымки — читает game.js каждый кадр. bloom уходит в bloom.apply(),
+  // hazeColor/hazeAmt — в юниформы height-fog (src/heightfog.js). Всё пересчитывается из времени/
+  // луны (ночью свечение ярче и холоднее; дымка гуще и темнее — дальняя стена сильнее тонет).
+  // hazeColor — стабильный объект (мутируем на месте), т.к. game.js его .copy()-ит в юниформ.
+  const bloomState = {
+    strength: 0.5, threshold: 0.64, tint: [1, 1, 1],
+    hazeColor: new THREE.Color(0x16202e), hazeAmt: 0.1,
+  };
   function setBloom(strength, threshold, tr, tg, tb) {
     bloomState.strength = strength;
     bloomState.threshold = threshold;
@@ -133,6 +142,9 @@ export function createLighting(scene, opts = {}) {
       hemi.intensity = 0.7;
       headlight.intensity = 0; // фары — только при готовой комнате/окне
       setBloom(0.45, 0.66, 1, 1, 1); // мягкое нейтральное свечение в голой комнате
+      // Лёгкая холодная дымка даже в пустой коробке — дальняя стена чуть тонет в мгле.
+      bloomState.hazeColor.setHex(0x16202e);
+      bloomState.hazeAmt = 0.12;
       return bloomState;
     }
 
@@ -222,6 +234,19 @@ export function createLighting(scene, opts = {}) {
       0.70 - 0.18 * nightF,
       1 - 0.10 * cool, 1 - 0.02 * cool, 1 + 0.16 * cool
     );
+
+    // --- ВОЗДУШНАЯ ПЕРСПЕКТИВА (height-fog): цвет/плотность дымки дальней стены ---
+    // Берём УЖЕ посчитанный цвет окна (scratch) — это и есть соблюдение SYNC (новой суточной
+    // математики не заводим). Дальняя дымка ОБЯЗАНА быть холоднее и бледнее источника: лёгкий
+    // сдвиг к рассеянному HEMI и приглушение. Ночью тянем к общему void (#10131f) — комната
+    // тонет в ту же мглу, что fog.js за стенами. Цвет остаётся ТЁМНЫМ (luma << порога bloom),
+    // поэтому дальняя стена не зацветёт. Считается в том же троттл-блоке, что dayF (раз в 4 кадра).
+    bloomState.hazeColor
+      .copy(scratch)
+      .lerp(hemi.color, 0.5)
+      .multiplyScalar(0.9)
+      .lerp(C_HAZE_VOID, nightF * 0.7);
+    bloomState.hazeAmt = 0.16 + 0.20 * nightF; // ночью гуще — дальняя стена сильнее тонет
     return bloomState;
   }
 
