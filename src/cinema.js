@@ -50,6 +50,7 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
   let weight = 0;       // 0 = игровая поза, 1 = полное дыхание; рампится плавно
   let active = false;   // включён ли режим
   let settled = true;   // поза уже возвращена к игровой (после выхода)
+  let placing = false;  // игрок держит/ставит предмет? → камеру замораживаем (точная расстановка)
 
   // ===================== CSS-СЛОИ ПОВЕРХ ХОЛСТА =====================
   // Все pointer-events:none (касания проходят сквозь к document → tap-to-exit), появляются по
@@ -111,34 +112,21 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
     clockEl.textContent = clockText(time);
   }
 
-  // ===================== КУРСОР И ВЫХОД =====================
+  // ===================== КУРСОР (выход — ТОЛЬКО через «глаз») =====================
+  // Выхода по любому касанию/клавише НЕТ намеренно: в режиме любования можно спокойно двигать
+  // предметы (placement.js) — клики по сцене не должны выкидывать из режима. Вход и выход —
+  // кнопкой-«глазом» (она остаётся видимой). Курсор прячется при простое (чистая запись), но
+  // любое движение мыши его возвращает — значит при расстановке он всегда на месте.
   let cursorTimer = null;
   function pokeCursor() {
     document.body.style.cursor = '';
     if (cursorTimer) clearTimeout(cursorTimer);
     if (active) cursorTimer = setTimeout(() => { document.body.style.cursor = 'none'; }, 2000);
   }
-  // Любое касание/клавиша = выход. Идём через «глаз» (ui.js — единственный владелец флага),
-  // чтобы состояние не разъехалось. Клик по самому глазу не перехватываем — он сам тумблер.
-  function onExitEvent(e) {
-    if (e.target && e.target.closest && e.target.closest('#ui-cinema')) return;
-    const eye = document.getElementById('ui-cinema');
-    if (eye) eye.click();
-  }
 
-  function addExitListeners() {
-    if (!active) return;
-    document.addEventListener('pointerdown', onExitEvent, true);
-    document.addEventListener('keydown', onExitEvent, true);
-    document.addEventListener('touchstart', onExitEvent, true);
-    document.addEventListener('mousemove', pokeCursor);
-  }
-  function removeExitListeners() {
-    document.removeEventListener('pointerdown', onExitEvent, true);
-    document.removeEventListener('keydown', onExitEvent, true);
-    document.removeEventListener('touchstart', onExitEvent, true);
-    document.removeEventListener('mousemove', pokeCursor);
-  }
+  // game.js сообщает, держит ли игрок предмет: тогда дыхание камеры гасим (weight→0), камера
+  // встаёт в неподвижную центрированную игровую позу — клетка под курсором не «уплывает».
+  function setPlacing(v) { placing = !!v; }
 
   // ===================== ВХОД / ВЫХОД =====================
   function enter() {
@@ -159,14 +147,14 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
       void card.offsetWidth; // reflow — перезапуск CSS-анимации
       card.classList.add('show');
     }
-    // Слушатели выхода — чуть позже, чтобы входной клик по глазу не вышел тут же.
-    setTimeout(addExitListeners, 80);
+    document.addEventListener('mousemove', pokeCursor); // вернуть курсор при движении мыши
     pokeCursor();
   }
 
   function exit() {
     active = false;
-    removeExitListeners();
+    placing = false;
+    document.removeEventListener('mousemove', pokeCursor);
     if (cursorTimer) clearTimeout(cursorTimer);
     document.body.style.cursor = '';
     card.classList.remove('show');
@@ -176,7 +164,9 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
   // Вызывается в game.js СРАЗУ ПОСЛЕ updateCameraAnim(dt). dt — секунды с прошлого кадра.
   function update(dt, time) {
     const d = Math.min(Math.max(dt, 0), 0.1);
-    const target = active ? 1 : 0;
+    // Держит предмет → гасим дыхание (weight→0): камера встаёт в неподвижную центрированную
+    // позу, клетка под курсором не уплывает. Отпустил → дыхание плавно возвращается.
+    const target = (active && !placing) ? 1 : 0;
     // Вход медленнее (плёнка «разгоняется до скорости»), выход быстрее. Экспоненциальное
     // сглаживание, не зависящее от fps (как updateCameraAnim в camera.js).
     const baseK = active ? 0.06 : 0.0008;
@@ -236,5 +226,5 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
     if (active) updateOsd(time);
   }
 
-  return { enter, exit, update, isActive: () => active };
+  return { enter, exit, update, isActive: () => active, setPlacing };
 }

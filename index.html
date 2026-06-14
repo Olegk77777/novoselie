@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=67">
-  <link rel="stylesheet" href="design/type.css?v=67">
+  <link rel="stylesheet" href="design/colors.css?v=68">
+  <link rel="stylesheet" href="design/type.css?v=68">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -110,9 +110,11 @@
     #ui-left, #ui-top, #ui-bottom, #ui-hint-toast, #ui-sound {
       transition: opacity 0.5s ease;
     }
-    /* Режим любования: прячем весь HUD, оставляем лишь приглушённый глаз */
+    /* Режим любования: прячем весь HUD, оставляем лишь приглушённый глаз.
+       #ui-top НЕ прячем: в нём кнопки «Повернуть/Убрать», которые сами видны ТОЛЬКО когда
+       предмет в руке. Значит при расстановке в режиме любования управление есть (важно для
+       iPad, где нет клавиш R/Esc), а в покое (запись) кадр остаётся чистым. */
     body.cinema #ui-left,
-    body.cinema #ui-top,
     body.cinema #ui-bottom,
     body.cinema #ui-hint-toast,
     body.cinema #ui-sound {
@@ -796,6 +798,6 @@
 <body>
   <div id="error-overlay"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=67"></script>
+  <script type="module" src="src/game.js?v=68"></script>
 </body>
 </html>
