@@ -137,7 +137,8 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
   }
 
   applyZoom(); // стартовое вписывание пола в экран
-  return { camera, resize, zoomBy, setReservedLeft, updateCameraAnim };
+  // getZoom — текущий ручной множитель зума (для микропараллакса тумана в fog.js)
+  return { camera, resize, zoomBy, setReservedLeft, updateCameraAnim, getZoom: () => userZoom };
 }
 
 // Навешивает управление зумом на холст: колесо мыши + щипок двумя пальцами (pinch).

@@ -8,9 +8,14 @@
 # Остановить: Ctrl+C
 
 import http.server
+import os
 import socketserver
 
-PORT = 8123
+# По умолчанию 8123 (ручной запуск Олега: python3 serve.py → localhost:8123).
+# Но харнесс-превью может задать свой порт через переменную окружения PORT —
+# тогда сервер точно поднимется ИЗ ТЕКУЩЕЙ папки worktree, а не переиспользует
+# чужой сервер, уже висящий на 8123 (бывало — отдавал старую версию).
+PORT = int(os.environ.get('PORT', 8123))
 
 
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):

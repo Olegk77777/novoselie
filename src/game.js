@@ -3,19 +3,20 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=58';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=58';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=58';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=58';
-import { createPlacement } from './placement.js?v=58';
-import { createUI } from './ui.js?v=58';
-import { renderItemIcon } from './icon.js?v=58';
-import { createPower } from './power.js?v=58';
-import { evaluateCombos } from './combos.js?v=58';
-import { isQuestDone } from './quests.js?v=58';
-import { createCat } from './cat.js?v=58';
-import { createLighting } from './lighting.js?v=58';
-import { createBloom } from './bloom.js?v=58';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=59';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=59';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=59';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=59';
+import { createPlacement } from './placement.js?v=59';
+import { createUI } from './ui.js?v=59';
+import { renderItemIcon } from './icon.js?v=59';
+import { createPower } from './power.js?v=59';
+import { evaluateCombos } from './combos.js?v=59';
+import { isQuestDone } from './quests.js?v=59';
+import { createCat } from './cat.js?v=59';
+import { createLighting } from './lighting.js?v=59';
+import { createBloom } from './bloom.js?v=59';
+import { createFog } from './fog.js?v=59';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -59,10 +60,12 @@ async function init() {
 
   // Сцена — "мир", в который добавляются все объекты
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a2e); // холодные сумерки за окном
+  // Фон — холодная синяя пустота. Это лишь ФОЛБЭК на один кадр / на случай ошибки шейдера:
+  // сверху рисуется непрозрачный туман-фон (см. createFog ниже), он и заменяет плоскую заливку.
+  scene.background = new THREE.Color(0x10131f);
 
   // Изометрическая камера: сама вписывает комнату в экран
-  const { camera, resize: resizeCamera, zoomBy, setReservedLeft, updateCameraAnim } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
+  const { camera, resize: resizeCamera, zoomBy, setReservedLeft, updateCameraAnim, getZoom } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
 
   // Свет: эстетика Хоппера / Limbo-в-цвете. Главное заполнение — ОТ ОКНА (холодное),
   // полумрак синеватый, тепло — от приборов и тёплого света из дверного проёма (контраст).
@@ -81,6 +84,13 @@ async function init() {
   // Пылинки в воздухе — еле заметные светящиеся частички (живой воздух). Анимируются
   // через userData.tick в кадровом цикле (как аквариум/окно).
   scene.add(createDustMotes(GRID_COLS, GRID_ROWS, WALL_HEIGHT));
+
+  // Туман-фон: думерская светящаяся мгла вокруг квартиры (вместо плоской заливки).
+  // Два полноэкранных квада в клип-пространстве (за комнатой + язычки над кромками).
+  // uClear 0..1 рассеивает её — позже от числа открытых комнат, сейчас мягко от уюта.
+  const fog = createFog(scene);
+  let fogClear = 0;        // текущая степень расчистки (плавно догоняет цель)
+  let fogClearTarget = 0;  // цель: доля уюта × 0.35 (туман редеет, но не исчезает)
 
   // Кот-житель: бонус за квест «табурет у окна». Создаётся скрытым, оживает после
   // выполнения квеста — забегает из дверного проёма, прыгает на свой табурет, сидит,
@@ -186,6 +196,10 @@ async function init() {
     const total = placementComfort + renoComfort + questComfort + comboSum;
     ui.setComfort(total);
     ui.setCombos(comboResults);
+    // Туман редеет по мере обживания. Сейчас — мягкий суррогат «открытия комнат»:
+    // доля заполненной шкалы × 0.35 (даже на 100% мгла лишь чуть отступает —
+    // думерское настроение сохраняем). Полный диапазон 0..1 оставлен на v0.3+ (комнаты).
+    fogClearTarget = THREE.MathUtils.clamp(total / maxComfort, 0, 1) * 0.35;
     // Вся шкала уюта закрылась И все задания закрыты — настоящее 100%.
     // Большой поздравительный модал + выдача финального трофея (неоновый фламинго).
     // (Полная шкала по построению уже требует выполнить все задания — награды квестов
@@ -611,6 +625,15 @@ async function init() {
     updateCameraAnim(dt); // плавный «переезд» комнаты (режим любования)
     // Окно «живёт»: сутки за окном идут по кругу (день → закат → ночь → рассвет)
     if (windowGlass) windowGlass.uniforms.uTime.value = time;
+    // Туман-фон: дышит во времени; рассеивается плавно (экспоненциальное сглаживание,
+    // не зависящее от fps — расчистка читается как анимация, а не скачок).
+    fogClear += (fogClearTarget - fogClear) * (1 - Math.pow(0.06, Math.min(Math.max(dt, 0), 0.1)));
+    fog.update(
+      time,
+      renderer.domElement.width / Math.max(1, renderer.domElement.height),
+      getZoom(),
+      fogClear
+    );
     // Свет комнаты реагирует на окно: оконный свет/полусфера пересчитываются из того же
     // времени (день холодный → закат янтарь → ночь тьма + серебро луны → дождь свинец).
     // update() заодно отдаёт параметры Bloom (ярче ночью/в полнолуние).
