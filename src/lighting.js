@@ -81,6 +81,17 @@ export function createLighting(scene, opts = {}) {
   door.castShadow = false;
   scene.add(door);
 
+  // HEADLIGHT — фары проезжающей за окном машины. Только в режиме любования и только ночью:
+  // редкий холодный поток медленно ползёт по дальней стене и полу у окна (классика «Молчат
+  // Дома» — кто-то проехал в два часа ночи). Без тени, decay 1 — мягкое пятно. Гасится в 0,
+  // когда нет проезда, поэтому в обычной игре не влияет. Свет тусклый — bloom не вспыхивает.
+  const headlight = new THREE.SpotLight(0xbfd0e8, 0, 22, 0.5, 0.92, 1.0);
+  headlight.position.set(0, 3.0, -7.8); // за дальней стеной (окно z≈-4), сверху
+  headlight.target.position.set(0, 0.5, -2.6); // на пол/стену у окна
+  headlight.castShadow = false;
+  scene.add(headlight.target);
+  scene.add(headlight);
+
   // Опорные цвета оконного света (между ними интерполируем по времени/погоде/луне).
   const C_DAY = new THREE.Color(0xaecbf2); // холодный дневной
   const C_DUSK = new THREE.Color(0xff8a44); // тёплый закат (золотой час)
@@ -120,6 +131,7 @@ export function createLighting(scene, opts = {}) {
       winSpill.intensity = 7.0; // холодный поток из пустого проёма (видно прибраться)
       hemi.color.setHex(0x45526e);
       hemi.intensity = 0.7;
+      headlight.intensity = 0; // фары — только при готовой комнате/окне
       setBloom(0.45, 0.66, 1, 1, 1); // мягкое нейтральное свечение в голой комнате
       return bloomState;
     }
@@ -182,6 +194,25 @@ export function createLighting(scene, opts = {}) {
     scratch2.copy(HEMI_NIGHT).lerp(HEMI_DAY, dayF);
     scratch2.lerp(C_MOON_HEMI, moonWash * 0.5);
     hemi.color.copy(scratch2);
+
+    // --- ФАРЫ за окном: только в режиме любования и ночью. Редкий проезд (период ~23 c,
+    //     ~58% периодов — машина), холодное пятно медленно ползёт по стене/полу у окна.
+    //     Тускло (×nightF), bloom не вспыхивает. Вне cinema/днём — гаснет в 0. ---
+    let carI = 0, carX = 0;
+    if (document.body.classList.contains('cinema')) {
+      const PERIOD = 23.0, SPAN = 0.34; // секунд между машинами; доля периода под проезд
+      const idx = Math.floor(t / PERIOD);
+      const local = fract(t / PERIOD);
+      if (hash1(idx * 2.17 + 0.3) > 0.42 && local < SPAN) {
+        const p = local / SPAN;        // 0..1 поперёк окна
+        carX = -6.5 + 13 * p;
+        carI = Math.sin(p * Math.PI);  // колокол: 0 на краях, пик в центре проезда
+      }
+    }
+    headlight.target.position.x = carX;
+    headlight.position.x = carX * 0.55;
+    headlight.target.updateMatrixWorld();
+    headlight.intensity = carI * 1.4 * nightF;
 
     // --- параметры Bloom: ярче и мягче ночью и в полнолуние (таинственное свечение),
     //     слегка холоднее под луной (тёплые лампы при этом остаются тёплыми) ---

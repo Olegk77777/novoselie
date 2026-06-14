@@ -44,6 +44,9 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
 
   // Ручной множитель зума от пользователя (колесо/пинч). 1.0 = ровно авто-вписывание.
   let userZoom = 1.0;
+  // Последний «базовый» зум (fit × userZoom), который выставил applyZoom. Режим любования
+  // (cinema.js) читает его как точку отсчёта для зум-бриза, не вмешиваясь в applyZoom.
+  let lastBaseZoom = 1.0;
   // Сколько пикселей слева отдать под HUD (плашки уюта/заданий). Комната
   // вписывается в ПРАВУЮ область [reservedLeft, ширина] и сдвигается туда,
   // чтобы панель заданий не перекрывала комнату. 0 = комната по центру.
@@ -77,7 +80,8 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
     const { mx, my } = fitMetrics();
     const availX = Math.max(0.1, (w - reservedLeft) / w); // доля ширины под комнату
     const fit = Math.min((FILL * availX) / mx, FILL / my);
-    camera.zoom = fit * userZoom;
+    lastBaseZoom = fit * userZoom;
+    camera.zoom = lastBaseZoom;
     if (reservedLeft > 0) {
       // сдвиг вправо на половину полосы — комната встаёт по центру правой части.
       // Сдвиг идёт через матрицу проекции, поэтому клики/raycast остаются верными.
@@ -138,7 +142,13 @@ export function createIsoCamera(floorCols, floorRows, fitHeight = 0) {
 
   applyZoom(); // стартовое вписывание пола в экран
   // getZoom — текущий ручной множитель зума (для микропараллакса тумана в fog.js)
-  return { camera, resize, zoomBy, setReservedLeft, updateCameraAnim, getZoom: () => userZoom };
+  // getBaseZoom — фактический зум авто-вписывания (fit×userZoom); режим любования
+  // умножает на него зум-бриз, оставаясь последним, кто пишет camera.zoom за кадр.
+  return {
+    camera, resize, zoomBy, setReservedLeft, updateCameraAnim,
+    getZoom: () => userZoom,
+    getBaseZoom: () => lastBaseZoom,
+  };
 }
 
 // Навешивает управление зумом на холст: колесо мыши + щипок двумя пальцами (pinch).

@@ -3,21 +3,22 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=64';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=64';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=64';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=64';
-import { createPlacement } from './placement.js?v=64';
-import { createUI } from './ui.js?v=64';
-import { renderItemIcon } from './icon.js?v=64';
-import { createPower } from './power.js?v=64';
-import { evaluateCombos } from './combos.js?v=64';
-import { isQuestDone } from './quests.js?v=64';
-import { createCat } from './cat.js?v=64';
-import { createLighting } from './lighting.js?v=64';
-import { createBloom } from './bloom.js?v=64';
-import { createFog } from './fog.js?v=64';
-import { createMusic } from './music.js?v=64';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=65';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=65';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=65';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=65';
+import { createPlacement } from './placement.js?v=65';
+import { createUI } from './ui.js?v=65';
+import { renderItemIcon } from './icon.js?v=65';
+import { createPower } from './power.js?v=65';
+import { evaluateCombos } from './combos.js?v=65';
+import { isQuestDone } from './quests.js?v=65';
+import { createCat } from './cat.js?v=65';
+import { createLighting } from './lighting.js?v=65';
+import { createBloom } from './bloom.js?v=65';
+import { createFog } from './fog.js?v=65';
+import { createMusic } from './music.js?v=65';
+import { createCinema } from './cinema.js?v=65';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -66,7 +67,19 @@ async function init() {
   scene.background = new THREE.Color(0x10131f);
 
   // Изометрическая камера: сама вписывает комнату в экран
-  const { camera, resize: resizeCamera, zoomBy, setReservedLeft, updateCameraAnim, getZoom } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
+  const { camera, resize: resizeCamera, zoomBy, setReservedLeft, updateCameraAnim, getZoom, getBaseZoom } = createIsoCamera(GRID_COLS, GRID_ROWS, WALL_HEIGHT);
+
+  // Режим любования (созерцание / lo-fi видео): дышащая камера + кино-слои поверх кадра.
+  // Камера смотрит в (0, WALL_HEIGHT/2, 0) — это и есть targetY орбиты. Тексты — из локали
+  // (в коде только ключи). enter()/exit() дёргаются из onCinema (кнопка-«глаз» в ui.js).
+  const cinema = createCinema({
+    camera,
+    targetY: WALL_HEIGHT / 2,
+    getBaseZoom,
+    cards: [t(locale, 'cinema.card_1'), t(locale, 'cinema.card_2'), t(locale, 'cinema.card_3')],
+    osdLabel: t(locale, 'cinema.osd_rec'),
+    osdDate: t(locale, 'cinema.osd_date'),
+  });
 
   // Свет: эстетика Хоппера / Limbo-в-цвете. Главное заполнение — ОТ ОКНА (холодное),
   // полумрак синеватый, тепло — от приборов и тёплого света из дверного проёма (контраст).
@@ -513,9 +526,11 @@ async function init() {
     // переезжает в центр (полоса HUD больше не нужна). Вернулся — едет на место.
     onCinema: (active) => {
       if (active) {
+        cinema.enter();           // титульная строка, дыхание камеры, скрытие курсора, выход по касанию
         setReservedLeft(0, true); // плавно в центр
         document.documentElement.style.setProperty('--room-offset', '0px');
       } else {
+        cinema.exit();
         updateReservedLeft(true); // плавно вернуть на «рабочее» место
       }
     },
@@ -651,6 +666,7 @@ async function init() {
     const dt = time - lastTime; // секунд с прошлого кадра
     lastTime = time;
     updateCameraAnim(dt); // плавный «переезд» комнаты (режим любования)
+    cinema.update(dt, time); // дыхание/параллакс камеры в режиме любования (пишет zoom последним)
     // Окно «живёт»: сутки за окном идут по кругу (день → закат → ночь → рассвет)
     if (windowGlass) windowGlass.uniforms.uTime.value = time;
     // Туман-фон: дышит во времени; рассеивается плавно (экспоненциальное сглаживание,
@@ -665,7 +681,16 @@ async function init() {
     // Свет комнаты реагирует на окно: оконный свет/полусфера пересчитываются из того же
     // времени (день холодный → закат янтарь → ночь тьма + серебро луны → дождь свинец).
     // update() заодно отдаёт параметры Bloom (ярче ночью/в полнолуние).
-    const bloomParams = lighting.update(time, !!windowGlass);
+    let bloomParams = lighting.update(time, !!windowGlass);
+    // Режим любования: свечение еле «дышит» в фазе с зум-бризом. Копируем объект — lighting
+    // переиспользует bloomState и пересчитывает его раз в 4 кадра, мутировать на месте нельзя.
+    if (document.body.classList.contains('cinema')) {
+      bloomParams = {
+        strength: bloomParams.strength * (1 + 0.06 * Math.sin(time / 17.3)),
+        threshold: bloomParams.threshold,
+        tint: bloomParams.tint,
+      };
+    }
     // Анимированные предметы (аквариум: вода, рыбки, пузырьки) — у кого есть tick
     scene.traverse((o) => { if (o.userData.tick) o.userData.tick(time); });
     // Стрелки на мусор: качаются и мягко мигают, плавно гаснут через несколько секунд

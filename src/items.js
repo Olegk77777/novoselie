@@ -142,14 +142,18 @@ export function createDustMotes(cols, rows, height = 2.5) {
   points.renderOrder = 6;
   const pos = geo.attributes.position.array;
   points.userData.tick = (t) => {
+    // В режиме любования пыль гуще и заметнее — висит в косом луче окна (главный образ
+    // тихой квартиры). Те же ~90 точек, только выше прозрачность и шире дрейф — ноль доп.расхода.
+    const cine = document.body.classList.contains('cinema');
+    const amp = cine ? 1.3 : 1;
     for (let i = 0; i < COUNT; i++) {
       const ph = phases[i];
-      pos[i * 3] = base[i * 3] + Math.sin(t * 0.12 + ph) * 0.28; // дрейф по x
-      pos[i * 3 + 1] = base[i * 3 + 1] + Math.sin(t * 0.18 + ph * 1.7) * 0.16; // покачивание вверх-вниз
-      pos[i * 3 + 2] = base[i * 3 + 2] + Math.cos(t * 0.1 + ph * 0.8) * 0.28; // дрейф по z
+      pos[i * 3] = base[i * 3] + Math.sin(t * 0.12 + ph) * 0.28 * amp; // дрейф по x
+      pos[i * 3 + 1] = base[i * 3 + 1] + Math.sin(t * 0.18 + ph * 1.7) * 0.16 * amp; // покачивание вверх-вниз
+      pos[i * 3 + 2] = base[i * 3 + 2] + Math.cos(t * 0.1 + ph * 0.8) * 0.28 * amp; // дрейф по z
     }
     geo.attributes.position.needsUpdate = true;
-    mat.opacity = 0.18 + 0.08 * Math.sin(t * 0.5); // еле заметное общее мерцание
+    mat.opacity = (cine ? 0.26 : 0.18) + 0.08 * Math.sin(t * 0.5); // еле заметное общее мерцание
   };
   return points;
 }
