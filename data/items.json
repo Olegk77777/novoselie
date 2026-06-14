@@ -22,6 +22,7 @@
     { "id": "tape_player", "model": "tape_player", "size": [1, 1], "comfort": 4, "placement": "floor", "count": 1, "mountable": true, "cordLength": 2.5, "surface": "combined" },
     { "id": "aquarium", "model": "aquarium", "size": [1, 1], "comfort": 8, "placement": "floor", "count": 1, "cordLength": 2, "surface": "combined" },
     { "id": "flower_pot", "model": "flower_pot", "size": [1, 1], "comfort": 3, "placement": "floor", "count": 1, "mountable": true, "surface": "matte" },
-    { "id": "lava_lamp", "model": "lava_lamp", "size": [1, 1], "comfort": 7, "placement": "floor", "count": 1, "mountable": true, "surface": "emissive" }
+    { "id": "lava_lamp", "model": "lava_lamp", "size": [1, 1], "comfort": 7, "placement": "floor", "count": 1, "mountable": true, "surface": "emissive" },
+    { "id": "neon_flamingo", "model": "neon_flamingo", "size": [2, 2], "comfort": 0, "placement": "wall", "count": 1, "surface": "emissive", "_note": "финальный трофей за 100% (все задания + полная шкала). comfort:0 — иначе попал бы в максимум шкалы и создал дедлок (его дают за полную шкалу). Работает без розетки, как лава-лампа." }
   ]
 }

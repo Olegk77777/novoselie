@@ -3,19 +3,19 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=57';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=57';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=57';
-import { MODEL_BUILDERS, createDebrisField, createDustMotes } from './items.js?v=57';
-import { createPlacement } from './placement.js?v=57';
-import { createUI } from './ui.js?v=57';
-import { renderItemIcon } from './icon.js?v=57';
-import { createPower } from './power.js?v=57';
-import { evaluateCombos } from './combos.js?v=57';
-import { isQuestDone } from './quests.js?v=57';
-import { createCat } from './cat.js?v=57';
-import { createLighting } from './lighting.js?v=57';
-import { createBloom } from './bloom.js?v=57';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=58';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=58';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=58';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=58';
+import { createPlacement } from './placement.js?v=58';
+import { createUI } from './ui.js?v=58';
+import { renderItemIcon } from './icon.js?v=58';
+import { createPower } from './power.js?v=58';
+import { evaluateCombos } from './combos.js?v=58';
+import { isQuestDone } from './quests.js?v=58';
+import { createCat } from './cat.js?v=58';
+import { createLighting } from './lighting.js?v=58';
+import { createBloom } from './bloom.js?v=58';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -186,14 +186,20 @@ async function init() {
     const total = placementComfort + renoComfort + questComfort + comboSum;
     ui.setComfort(total);
     ui.setCombos(comboResults);
-    // Вся шкала уюта закрылась — большой поздравительный модал (новоселье состоялось)
-    if (!housewarmingShown && total >= maxComfort) {
+    // Вся шкала уюта закрылась И все задания закрыты — настоящее 100%.
+    // Большой поздравительный модал + выдача финального трофея (неоновый фламинго).
+    // (Полная шкала по построению уже требует выполнить все задания — награды квестов
+    // входят в максимум; явная проверка every(done) — на всякий случай и по смыслу.)
+    if (!housewarmingShown && total >= maxComfort && questState.every((q) => q.done)) {
       housewarmingShown = true;
       ui.showModal(
         t(locale, 'ui.housewarming_text'),
         t(locale, 'ui.housewarming_kicker'),
         t(locale, 'ui.housewarming_ok')
       );
+      // Трофей: разблокируем неон-фламинго на стену + объясняющий модал (после «Дом»)
+      ui.setLocked(['neon_flamingo'], false);
+      ui.showModal(t(locale, 'ui.trophy_text'), t(locale, 'ui.trophy_kicker'));
     }
   }
 
@@ -349,7 +355,7 @@ async function init() {
   const furnitureIds = records.filter((r) => r.placement !== 'reno').map((r) => r.id);
   // Часть предметов открывается не вместе с мебелью, а наградой за событие: удлинитель —
   // после электрификации, лава-лампа — за «гости», круглый ковёр — за «соседи» (reward.unlock).
-  const QUEST_REWARD_IDS = new Set([EXTENSION_ID, 'lava_lamp', 'round_rug']);
+  const QUEST_REWARD_IDS = new Set([EXTENSION_ID, 'lava_lamp', 'round_rug', 'neon_flamingo']);
   const unlockAfterReno = furnitureIds.filter((id) => !QUEST_REWARD_IDS.has(id));
   const renoDone = { debris: false, window: false, floor: false, walls: false };
 
@@ -420,6 +426,28 @@ async function init() {
   let debrisLeft = debrisField.children.length;
   const debrisRay = new THREE.Raycaster();
 
+  // Стрелки-указатели на кучи мусора — обучение первому шагу (по фидбеку: новичок не
+  // понял, что мусор надо убирать). Висят над кучами и качаются; появляются на
+  // несколько секунд после приветствия. Каждая — ребёнок своей кучи: убрал кучу →
+  // стрелка исчезает вместе с ней (см. removeDebrisAt). Кликов стрелка не ловит.
+  const ARROW_BASE_Y = 1.05;
+  const debrisArrows = [];
+  for (const pile of debrisField.children) {
+    const arrow = createDebrisArrow();
+    arrow.position.set(0, ARROW_BASE_Y, 0);
+    arrow.visible = false;
+    pile.add(arrow);
+    debrisArrows.push(arrow);
+  }
+  let arrowsActive = false; // показываем стрелки прямо сейчас?
+  let arrowsShownAt = -1;   // время начала показа (ставится в первом кадре показа)
+  function showDebrisArrows() {
+    if (renoDone.debris || !debrisArrows.length) return;
+    arrowsActive = true;
+    arrowsShownAt = -1;
+    for (const a of debrisArrows) if (a.parent) a.visible = true;
+  }
+
   function removeDebrisAt(event) {
     if (renoDone.debris) return; // мусор уже убран
     const rect = renderer.domElement.getBoundingClientRect();
@@ -438,6 +466,7 @@ async function init() {
     bumpShadows(); // кучу убрали — обновить тени
     if (debrisLeft <= 0) {
       renoDone.debris = true;
+      arrowsActive = false; // весь мусор убран — стрелки больше не нужны
       renoComfort += DEBRIS_COMFORT;
       refreshComfort();
       ui.setLocked(['reno_window'], false); // открываем «вставить окно»
@@ -534,8 +563,13 @@ async function init() {
   // Шрифты грузятся асинхронно — ширина колонки может измениться, пересчитаем
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateReservedLeft);
 
-  // Приветствие — первый модал при входе (думерское, с первыми делами)
-  ui.showModal(t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'));
+  // Приветствие — первый модал при входе (думерское, с первыми делами).
+  // Закрыл приветствие → на несколько секунд загораются стрелки над кучами мусора
+  // (подсказка для новичка, что первый шаг — убрать мусор).
+  ui.showModal(
+    t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'),
+    showDebrisArrows
+  );
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
   window.addEventListener('keydown', (e) => {
@@ -583,6 +617,20 @@ async function init() {
     const bloomParams = lighting.update(time, !!windowGlass);
     // Анимированные предметы (аквариум: вода, рыбки, пузырьки) — у кого есть tick
     scene.traverse((o) => { if (o.userData.tick) o.userData.tick(time); });
+    // Стрелки на мусор: качаются и мягко мигают, плавно гаснут через несколько секунд
+    if (arrowsActive) {
+      if (arrowsShownAt < 0) arrowsShownAt = time;
+      const age = time - arrowsShownAt;
+      const SHOW = 6, FADE = 1.3; // секунд: показ + затухание
+      const k = age <= SHOW ? 1 : Math.max(0, 1 - (age - SHOW) / FADE);
+      for (let i = 0; i < debrisArrows.length; i++) {
+        const a = debrisArrows[i];
+        if (!a.parent) continue; // куча убрана — стрелка ушла вместе с ней
+        a.position.y = ARROW_BASE_Y + Math.sin(time * 3 + i * 1.7) * 0.12; // покачивание
+        a.userData.arrowMat.opacity = k * (0.55 + 0.45 * Math.abs(Math.sin(time * 3.2)));
+      }
+      if (k <= 0) { arrowsActive = false; for (const a of debrisArrows) a.visible = false; }
+    }
     // Кот: забегает на свой табурет у окна, если квест выполнен
     const catStool = catTargetStool();
     cat.update(time, {

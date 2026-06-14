@@ -83,8 +83,9 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
     modalCard.classList.add('pop');
   }
   modalOk.addEventListener('click', () => {
-    modalQueue.shift();
+    const closed = modalQueue.shift();
     showNextModal();
+    if (closed && closed.onClose) closed.onClose(); // напр.: показать стрелки на мусор
   });
 
   // Левая колонка: шкала уюта + журнал заданий
@@ -278,8 +279,9 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
     showHint,
     // Крупное модальное уведомление с кнопкой ОК (для важных событий — квесты).
     // kicker — короткая надпись-ярлык сверху («Новое задание» / «Выполнено»).
-    showModal(text, kicker, okLabel) {
-      modalQueue.push({ text, kicker, okLabel });
+    // onClose — необязательный колбэк, вызывается при закрытии ИМЕННО этого модала.
+    showModal(text, kicker, okLabel, onClose) {
+      modalQueue.push({ text, kicker, okLabel, onClose });
       if (modalQueue.length === 1) showNextModal();
     },
     // Обновляет список активных бонусов (results — из combos.js)

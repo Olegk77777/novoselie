@@ -983,8 +983,12 @@ export function createArmchair() {
 }
 
 // === Стол 2×1: столешница + 4 ножки ===
+// Дерево — ТЁМНОЕ (орех): на светлой столешнице тёплый/иридесцентный свет лава-лампы
+// «выгорал» (поверхность и так светлая → цвет вымывался в белый). На тёмном дереве
+// цветные блики читаются насыщенно и красиво. Тот же материал, что у серванта.
 export function createTable() {
   const g = new THREE.Group();
+  const woodMaterial = walnutMaterial; // локально подменяем светлое дерево на тёмный орех
   g.add(box(1.84, 0.08, 0.84, woodMaterial, 0, 0.74, 0));
   for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
     g.add(box(0.09, 0.7, 0.09, woodMaterial, sx * 0.82, 0.35, sz * 0.33));
@@ -1674,6 +1678,127 @@ export function createDebrisField() {
   return g;
 }
 
+// === Стрелка-указатель на кучу мусора (обучение первому шагу) ===
+// Парит над кучей и качается, остриём вниз — «нажми сюда». Янтарная (акцент UI),
+// светится сама (MeshBasic, unlit) → bloom даёт мягкое сияние. Показывается на
+// несколько секунд после приветствия (game.js управляет видимостью/прозрачностью).
+// НЕ ловит клики (raycast у мешей отключён) — чтобы не раздувать хитбокс кучи.
+export function createDebrisArrow() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffb24a, transparent: true, opacity: 0.9 });
+  // Наконечник — 4-гранная пирамида остриём вниз (читается как стрелка «↓»)
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.30, 4), mat);
+  head.rotation.x = Math.PI;       // остриём вниз
+  head.rotation.y = Math.PI / 4;   // ромбом к зрителю
+  head.position.y = 0;
+  // Древко над наконечником
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.34, 8), mat);
+  shaft.position.y = 0.30;
+  head.raycast = shaft.raycast = () => {}; // стрелка прозрачна для кликов
+  g.add(head, shaft);
+  g.userData.arrowMat = mat;        // game.js крутит прозрачность (мигание/затухание)
+  return g;
+}
+
+// === Неоновый фламинго: настенный трофей за 100% (все задания + полная шкала уюта) ===
+// РАБОТАЕТ БЕЗ РОЗЕТКИ (как лава-лампа) — это награда, она просто светит всегда.
+// Розовые неоновые трубки (TubeGeometry/Torus вдоль силуэта) на тёмной доске,
+// холодная сине-зелёная неоновая рамка для контраста (классика розовый+тиал).
+// Свет — собственный розовый PointLight с лёгким «гудящим» миганием неона (tick).
+export function createNeonFlamingo() {
+  const g = new THREE.Group();
+  const V = (x, y, z = 0.07) => new THREE.Vector3(x, y, z); // трубки чуть перед доской
+  // Неоновая трубка вдоль кривой (мягкое стекло-свечение)
+  const tube = (pts, r, mat, closed = false) => {
+    const curve = new THREE.CatmullRomCurve3(pts, closed);
+    const geo = new THREE.TubeGeometry(curve, Math.max(16, pts.length * 8), r, 9, closed);
+    return new THREE.Mesh(geo, mat);
+  };
+  // Розовый неон: чёрная база + ярко-розовый emissive (трубка светится сама, ловит bloom)
+  const NEON = 0xff4f9a;
+  const pinkMat = new THREE.MeshLambertMaterial({ color: 0x180309, emissive: NEON, emissiveIntensity: 1.0 });
+  const tealMat = new THREE.MeshLambertMaterial({ color: 0x041413, emissive: 0x2fc9bd, emissiveIntensity: 0.85 });
+  const beakMat = new THREE.MeshLambertMaterial({ color: 0x140a02, emissive: 0xffb33a, emissiveIntensity: 1.0 });
+  const boardMat = lambert(0x0a0a12); // тёмная доска — неон на ней «горит»
+
+  // --- Тёмная доска-подложка (неон читается на тёмном) ---
+  g.add(box(1.02, 2.04, 0.06, boardMat, 0.02, 0.10, -0.03));
+
+  // --- Холодная неоновая рамка (скруглённый прямоугольник, контраст розовому) ---
+  const fw = 0.42, fh = 0.92, fr = 0.16; // полуширина/полувысота/скругление
+  const cx = 0.02, cy = 0.10;
+  const frame = [];
+  // Обходим 4 угла (TR→TL→BL→BR); каждый угол — дуга 90° вокруг своего центра.
+  const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+  for (let ci = 0; ci < 4; ci++) {
+    const [sx, sy] = corners[ci];
+    const ccx = cx + sx * (fw - fr); // центр скругления угла
+    const ccy = cy + sy * (fh - fr);
+    for (let s = 0; s <= 3; s++) {
+      const a = (ci * Math.PI) / 2 + (s / 3) * (Math.PI / 2);
+      frame.push(V(ccx + Math.cos(a) * fr, ccy + Math.sin(a) * fr, 0.04));
+    }
+  }
+  g.add(tube(frame, 0.028, tealMat, true));
+
+  // --- Тело фламинго (плотный овал) ---
+  const body = new THREE.Mesh(new THREE.TorusGeometry(0.30, 0.05, 14, 34), pinkMat);
+  body.scale.set(1.15, 0.82, 1);
+  body.position.set(0.07, 0.02, 0.07);
+  g.add(body);
+  // Крыло — дуга внутри тела
+  const wing = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.032, 10, 18, Math.PI * 1.15), pinkMat);
+  wing.rotation.z = -0.5;
+  wing.position.set(0.10, 0.05, 0.085);
+  g.add(wing);
+
+  // --- Шея: S-кривая от верха тела к голове ---
+  g.add(tube([
+    V(0.16, 0.34), V(0.26, 0.56), V(0.16, 0.74), V(-0.04, 0.84), V(-0.07, 0.96),
+  ], 0.045, pinkMat));
+  // --- Голова (кольцо) ---
+  const head = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.04, 12, 20), pinkMat);
+  head.position.set(-0.08, 1.0, 0.07);
+  g.add(head);
+  // Глаз — тёмная точка
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 8), lambert(0x05050a));
+  eye.position.set(-0.05, 1.03, 0.12);
+  g.add(eye);
+  // --- Клюв: загнут вниз, с тёмным кончиком (тёплый янтарный неон) ---
+  g.add(tube([V(-0.15, 1.01), V(-0.27, 0.99), V(-0.32, 0.90), V(-0.30, 0.83)], 0.04, beakMat));
+
+  // --- Ноги: две тонкие трубки вниз (передняя с «коленом») ---
+  g.add(tube([V(0.0, -0.20), V(-0.03, -0.46), V(0.05, -0.62), V(0.02, -0.84)], 0.034, pinkMat));
+  g.add(tube([V(0.18, -0.20), V(0.20, -0.52), V(0.18, -0.84)], 0.034, pinkMat));
+  // Лапки
+  g.add(tube([V(-0.06, -0.84), V(0.02, -0.86), V(0.10, -0.84)], 0.03, pinkMat));
+  g.add(tube([V(0.12, -0.84), V(0.18, -0.86), V(0.26, -0.84)], 0.03, pinkMat));
+
+  // Центрируем bbox в нуле (настенное размещение считает якорь от центра модели,
+  // как у wall_rug) — иначе знак висел бы со смещением и мог выступать за верх стены.
+  const bb = new THREE.Box3().setFromObject(g);
+  const midY = (bb.min.y + bb.max.y) / 2;
+  for (const ch of g.children) ch.position.y -= midY;
+  // Весь силуэт чуть уменьшаем, чтобы вписаться в стену (WALL_HEIGHT 2.5)
+  g.scale.setScalar(0.82);
+
+  // --- Розовый неоновый свет: горит ВСЕГДА (трофей), с лёгким гудящим миганием ---
+  const neonLight = makeApplianceLight(0xff5aa0, 5.0, [0, 0.1, 0.5]);
+  g.add(neonLight);
+
+  // game.js зовёт tick(t). Ток НЕ нужен — без проверки powered (как лава-лампа).
+  g.userData.tick = (t) => {
+    // Гудящий неон: ровное свечение + мелкая дрожь + редкий короткий «провал» трубки
+    let f = 1.0 + 0.05 * Math.sin(t * 7.0) + 0.035 * Math.sin(t * 12.7);
+    if (Math.sin(t * 0.7) * Math.sin(t * 2.3) > 0.95) f *= 0.55; // редкий микро-провал
+    pinkMat.emissiveIntensity = f;
+    beakMat.emissiveIntensity = f;
+    tealMat.emissiveIntensity = 0.85 + 0.05 * Math.sin(t * 3.1); // рамка ровнее
+    neonLight.intensity = 2.0 * f + 0.4;
+  };
+  return g;
+}
+
 // === Иконка «Вставить окно» (в комнату не ставится — применяется кликом) ===
 export function createRenoWindow() {
   const g = new THREE.Group();
@@ -1707,6 +1832,7 @@ export const MODEL_BUILDERS = {
   aquarium: createAquarium,
   flower_pot: createFlowerPot,
   lava_lamp: createLavaLamp,
+  neon_flamingo: createNeonFlamingo,
   outlet: createOutlet,
   extension_cord: createExtensionCord,
   reno_parquet: createRenoParquet,
