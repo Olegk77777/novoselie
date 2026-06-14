@@ -105,6 +105,8 @@ export function createLighting(scene, opts = {}) {
   // дальней стены ночью — он же voidBot из fog.js (#10131f), поэтому комната тонет в ТУ ЖЕ
   // мглу, что клубится за стенами (бесшовный стык интерьера и фона).
   const C_HAZE_VOID = new THREE.Color(0x10131f);
+  // Сине-циановая «стынь» — лёгкая примесь к дымке (запрос Олега): даль чуть холоднее и синее.
+  const C_HAZE_CYAN = new THREE.Color(0x183f5a);
   const scratch = new THREE.Color();
   const scratch2 = new THREE.Color();
 
@@ -142,9 +144,9 @@ export function createLighting(scene, opts = {}) {
       hemi.intensity = 0.7;
       headlight.intensity = 0; // фары — только при готовой комнате/окне
       setBloom(0.45, 0.66, 1, 1, 1); // мягкое нейтральное свечение в голой комнате
-      // Лёгкая холодная дымка даже в пустой коробке — дальняя стена чуть тонет в мгле.
-      bloomState.hazeColor.setHex(0x16202e);
-      bloomState.hazeAmt = 0.12;
+      // Лёгкая сине-циановая дымка даже в пустой коробке — дальняя стена чуть тонет в мгле.
+      bloomState.hazeColor.setHex(0x182f3c);
+      bloomState.hazeAmt = 0.11;
       return bloomState;
     }
 
@@ -245,8 +247,9 @@ export function createLighting(scene, opts = {}) {
       .copy(scratch)
       .lerp(hemi.color, 0.5)
       .multiplyScalar(0.9)
-      .lerp(C_HAZE_VOID, nightF * 0.7);
-    bloomState.hazeAmt = 0.16 + 0.20 * nightF; // ночью гуще — дальняя стена сильнее тонет
+      .lerp(C_HAZE_VOID, nightF * 0.7)
+      .lerp(C_HAZE_CYAN, 0.2); // примесь синевы/циана (запрос Олега)
+    bloomState.hazeAmt = 0.15 + 0.19 * nightF; // ночью гуще; чуть прозрачнее, чем было
     return bloomState;
   }
 

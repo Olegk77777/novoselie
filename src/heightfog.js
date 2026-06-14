@@ -38,13 +38,14 @@ import * as THREE from 'three';
 export function createHeightFog() {
   // Общий объект юниформов на ВСЕ материалы (game.js обновляет color/amt из lighting.js).
   // uYLow/uYHigh — диапазон высот набора дымки: ниже uYLow дымки нет (пол, сетка, низ мебели),
-  // выше uYHigh — максимум. uYHigh чуть ниже WALL_HEIGHT(2.5), чтобы верх дальней стены успевал
-  // выйти на полную дымку.
+  // выше uYHigh — максимум. ШИРОКАЯ полоса (0.5..3.6) — переход «дымка → чисто» намного плавнее
+  // (нет заметной границы). uYHigh ВЫШЕ верха стен (WALL_HEIGHT=2.5) НАРОЧНО: верх стены не
+  // добирает дымку до полной → вверху прозрачнее (запрос Олега). yLow держит пол и низ мебели чистыми.
   const u = {
-    uHazeColor: { value: new THREE.Color(0x16202e) },
+    uHazeColor: { value: new THREE.Color(0x182f3c) },
     uHazeAmt:   { value: 0.0 },
-    uYLow:      { value: 0.7 },
-    uYHigh:     { value: 2.3 },
+    uYLow:      { value: 0.5 },
+    uYHigh:     { value: 3.6 },
   };
 
   // Какие материалы уже одеты — чтобы apply был идемпотентным и для шаренных материалов.
