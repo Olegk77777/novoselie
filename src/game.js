@@ -3,23 +3,23 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=76';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=76';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=76';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=76';
-import { createPlacement } from './placement.js?v=76';
-import { createUI } from './ui.js?v=76';
-import { renderItemIcon } from './icon.js?v=76';
-import { createPower } from './power.js?v=76';
-import { evaluateCombos } from './combos.js?v=76';
-import { isQuestDone } from './quests.js?v=76';
-import { createCat } from './cat.js?v=76';
-import { createLighting } from './lighting.js?v=76';
-import { createHeightFog } from './heightfog.js?v=76';
-import { createBloom } from './bloom.js?v=76';
-import { createFog } from './fog.js?v=76';
-import { createMusic } from './music.js?v=76';
-import { createCinema } from './cinema.js?v=76';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=77';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=77';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=77';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=77';
+import { createPlacement } from './placement.js?v=77';
+import { createUI } from './ui.js?v=77';
+import { renderItemIcon } from './icon.js?v=77';
+import { createPower } from './power.js?v=77';
+import { evaluateCombos } from './combos.js?v=77';
+import { isQuestDone } from './quests.js?v=77';
+import { createCat } from './cat.js?v=77';
+import { createLighting } from './lighting.js?v=77';
+import { createHeightFog } from './heightfog.js?v=77';
+import { createBloom } from './bloom.js?v=77';
+import { createFog } from './fog.js?v=77';
+import { createMusic } from './music.js?v=77';
+import { createCinema } from './cinema.js?v=77';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -84,7 +84,7 @@ async function init() {
     // засыпающий взгляд хозяина. Точки берём из текущей расстановки (вызывается на смене якоря).
     getFocusAnchors: () => {
       const a = [{ x: (winCut.alongMin + winCut.alongMax) / 2, z: winSurf.plane }]; // окно — душа кадра
-      const warm = new Set(['floor_lamp', 'tv', 'aquarium', 'lava_lamp']);
+      const warm = new Set(['floor_lamp', 'tv', 'aquarium', 'lava_lamp', 'candle']);
       for (const it of lastLayout) {
         if (warm.has(it.userData?.def?.id)) a.push({ x: it.position.x, z: it.position.z });
       }

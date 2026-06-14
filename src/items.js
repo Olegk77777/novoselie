@@ -1528,6 +1528,105 @@ export function createFlowerPot() {
   return g;
 }
 
+// === Свеча в латунном подсвечнике 1×1 (живой огонь, не электроприбор) ===
+// РАБОТАЕТ БЕЗ РОЗЕТКИ (это пламя, а не лампа) — свет горит ВСЕГДА, без проверки
+// g.userData.powered. Ставится на пол и на ЛЮБУЮ поверхность (стол, табурет, тумбу,
+// верх серванта) — mountable:true. Низ модели на y=0 (требование для mountable).
+//
+// Красота — в ЖИВОМ ОГНЕ: пламя собрано слоями (ореол → тело → язык → ядро),
+// светится само (unlit MeshBasic, ловит bloom) и «танцует» в tick; тёплый PointLight
+// мерцает на несоизмеримых частотах (неровно, как настоящая свеча) и припадает на
+// редком «сквозняке». Это камерный тёплый очаг — контраст холодному полумраку (Хоппер).
+export function createCandle() {
+  const g = new THREE.Group();
+  // Усечённый конус (тарелочка/чашечка/тело свечи): radiusTop, radiusBottom, высота
+  const cone = (rTop, rBot, h, mat, y, seg = 18) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, seg), mat);
+    m.position.y = y;
+    return m;
+  };
+  // Светящийся (unlit) материал пламени: горит сам, тон-маппинг его не трогает, ловит bloom.
+  const fire = (color, opacity, additive = false) => new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity, depthWrite: false,
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+  });
+
+  // --- Подсвечник: потемневшая латунь (тёплый металл — красиво отражает огонь) ---
+  const brass = lambert(0x6e5224);
+  g.add(cone(0.215, 0.195, 0.025, brass, 0.0125));                 // блюдце-капельник
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.014, 8, 24), brass);
+  rim.rotation.x = Math.PI / 2; rim.position.y = 0.026; g.add(rim); // приподнятый ободок блюдца
+  g.add(cone(0.07, 0.1, 0.045, brass, 0.047));                     // ножка чашечки
+  g.add(cone(0.062, 0.05, 0.075, brass, 0.105));                   // чашечка-розетка под свечу
+  const rim2 = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.01, 8, 20), brass);
+  rim2.rotation.x = Math.PI / 2; rim2.position.y = 0.14; g.add(rim2); // ободок чашечки
+  // Ручка-петля сбоку (узнаваемый «носимый» подсвечник-chamberstick)
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.011, 8, 18, Math.PI * 1.35), brass);
+  handle.position.set(0.205, 0.075, 0); handle.rotation.y = Math.PI / 2; handle.rotation.z = -0.6;
+  g.add(handle);
+
+  // --- Свеча: восковое тело, оплавленная верхушка, потёки воска ---
+  const WAX = lambert(0xeadcc0, { emissive: 0x2a1d0e });           // кремовый воск, чуть просвечивает
+  const WAX_TOP = lambert(0xf2e2c2, { emissive: 0x6a4420 });       // оплавленный верх теплее (динамим в tick)
+  const dripMat = lambert(0xe2d2b2, { emissive: 0x241a0c });       // бледные застывшие потёки
+  const candleBottom = 0.11, candleH = 0.34;
+  const topY = candleBottom + candleH;                             // верх свечи ≈ 0.45
+  g.add(cone(0.05, 0.053, candleH, WAX, candleBottom + candleH / 2)); // тело свечи
+  g.add(cone(0.054, 0.05, 0.022, WAX_TOP, topY + 0.005));          // оплавленная лужица на верхушке
+  // Потёки воска по бокам — застывшие струйки разной длины с каплей на конце (обжитость)
+  for (const [ang, dripTop, len] of [[0.6, 0.40, 0.14], [2.5, 0.36, 0.1], [4.3, 0.42, 0.16]]) {
+    const rx = Math.cos(ang) * 0.05, rz = Math.sin(ang) * 0.05;
+    const drip = cone(0.011, 0.015, len, dripMat, dripTop - len / 2, 8);
+    drip.position.x = rx; drip.position.z = rz; g.add(drip);
+    const bead = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 6), dripMat);
+    bead.position.set(rx, dripTop - len, rz); g.add(bead);
+  }
+  // Фитиль — тонкий обугленный кончик, чуть наклонён
+  g.add(cyl(0.004, 0.05, lambert(0x20160e), 0, topY + 0.02, 0, 0, 0.16));
+
+  // --- Пламя: слои свечения от ореола к ядру (unlit, ловит bloom), танцуют в tick ---
+  const flame = new THREE.Group();
+  flame.position.set(0, topY + 0.05, 0);                           // основание пламени у кончика фитиля
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), fire(0xff6a22, 0.18, true));
+  glow.scale.set(0.15, 0.27, 0.15); glow.position.y = 0.085; glow.renderOrder = 3; flame.add(glow);
+  const bodyBase = new THREE.Mesh(new THREE.SphereGeometry(0.044, 12, 8), fire(0xff7e2a, 0.55));
+  bodyBase.scale.set(1, 0.75, 1); bodyBase.position.y = 0.035; bodyBase.renderOrder = 4; flame.add(bodyBase);
+  const bodyF = new THREE.Mesh(new THREE.ConeGeometry(0.044, 0.18, 14), fire(0xff7e2a, 0.55));
+  bodyF.position.y = 0.075; bodyF.renderOrder = 4; flame.add(bodyF);
+  const innerBase = new THREE.Mesh(new THREE.SphereGeometry(0.026, 12, 8), fire(0xffd877, 0.95));
+  innerBase.scale.set(1, 0.8, 1); innerBase.position.y = 0.03; innerBase.renderOrder = 5; flame.add(innerBase);
+  const inner = new THREE.Mesh(new THREE.ConeGeometry(0.026, 0.12, 14), fire(0xffd877, 0.95));
+  inner.position.y = 0.06; inner.renderOrder = 5; flame.add(inner);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 10), fire(0xfff6dc, 1));
+  core.position.y = 0.028; core.renderOrder = 6; flame.add(core);
+  g.add(flame);
+
+  // --- Тёплый свечной свет: горит ВСЕГДА (огонь), мерцает живо, припадает на «сквозняке» ---
+  const candleLight = makeApplianceLight(0xffa64d, 3.6, [0, topY + 0.08, 0]);
+  g.add(candleLight);
+
+  // game.js зовёт tick(t) каждый кадр. Ток НЕ нужен — без проверки powered (как лава-лампа).
+  g.userData.tick = (t) => {
+    // Несоизмеримые частоты → неровное живое мерцание (а не механический период)
+    const f = 0.55 * Math.sin(t * 11.0) + 0.3 * Math.sin(t * 17.3 + 1.3)
+            + 0.2 * Math.sin(t * 26.0 + 0.7) + 0.12 * Math.sin(t * 6.1);
+    // Редкий «порыв сквозняка»: пламя клонится и тускнеет, потом выпрямляется (0..1)
+    const gp = Math.sin(t * 0.43) * Math.sin(t * 1.21 + 0.5);
+    const gust = gp > 0.82 ? (gp - 0.82) / 0.18 : 0;
+    // Свет: тёплое мерцание + притухание на порыве; оттенок чуть краснеет, когда «припадает»
+    candleLight.intensity = (2.3 + 0.55 * f) * (1 - 0.5 * gust);
+    candleLight.color.setRGB(1.0, Math.max(0, 0.62 + 0.03 * f - 0.12 * gust), Math.max(0, 0.3 - 0.12 * gust));
+    // Пламя танцует: вытягивается/сжимается по высоте, клонится и сносится по «ветру»
+    flame.scale.set(1 - 0.05 * f, 1 + 0.16 * f - 0.1 * gust, 1 - 0.05 * f);
+    flame.rotation.z = -0.1 * f - 0.55 * gust;
+    flame.position.x = 0.01 * Math.sin(t * 7.3) + 0.03 * gust;
+    glow.material.opacity = 0.12 + 0.08 * (0.5 + 0.5 * f) - 0.05 * gust;
+    // Верхушка воска теплеет на ярком пламени (подсвечена огнём сверху)
+    WAX_TOP.emissive.setRGB(0.42 + 0.1 * f, 0.27 + 0.06 * f, 0.1);
+  };
+  return g;
+}
+
 // === Лава-лампа на аккумуляторе 1×1 (награда за квест «гости») ===
 // РАБОТАЕТ БЕЗ РОЗЕТКИ (батарейка) — поэтому НЕ электроприбор (нет cordLength),
 // свечение горит ВСЕГДА, без проверки g.userData.powered. Можно ставить на пол и на
@@ -1835,6 +1934,7 @@ export const MODEL_BUILDERS = {
   tape_player: createTapePlayer,
   aquarium: createAquarium,
   flower_pot: createFlowerPot,
+  candle: createCandle,
   lava_lamp: createLavaLamp,
   neon_flamingo: createNeonFlamingo,
   outlet: createOutlet,
