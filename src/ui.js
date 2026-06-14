@@ -290,6 +290,60 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
   }
   setComfort(0);
 
+  // Обучающая стрелка-указатель на элемент интерфейса: амбер-стрелка + бумажная
+  // подпись. Появляется на несколько секунд в начале игры и плавно гаснет — мягко
+  // показывает новичку нужную кнопку/панель. placement = с какой стороны от цели
+  // рисуем (и куда показывает стрелка): 'right' (стрелка ←), 'left' (→), 'below' (↑).
+  // Возвращает функцию dismiss() — убрать стрелку досрочно.
+  function showPointer(target, text, placement = 'left', holdMs = 6500) {
+    if (!target) return () => {};
+    const rect = target.getBoundingClientRect();
+    if (!rect.width && !rect.height) return () => {}; // цель скрыта — пропускаем
+    const wrap = document.createElement('div');
+    wrap.className = 'ui-pointer dir-' + placement;
+    const arrow = document.createElement('span');
+    arrow.className = 'ui-pointer-arrow';
+    const label = document.createElement('div');
+    label.className = 'ui-pointer-label';
+    label.textContent = text;
+    const GAP = 12;
+    if (placement === 'right') {
+      arrow.textContent = '←';
+      wrap.append(arrow, label);
+      wrap.style.left = rect.right + GAP + 'px';
+      wrap.style.top = rect.top + rect.height / 2 + 'px';
+    } else if (placement === 'below' || placement === 'below-right') {
+      arrow.textContent = '↑';
+      wrap.append(arrow, label);
+      wrap.style.top = rect.bottom + GAP + 'px';
+      // 'below' центрируем под целью; 'below-right' прижимаем к правому краю цели —
+      // для кнопок в самом углу (стрелка ↑ под целью, подпись растягивается влево).
+      if (placement === 'below-right') wrap.style.right = window.innerWidth - rect.right + 'px';
+      else wrap.style.left = rect.left + rect.width / 2 + 'px';
+    } else {
+      arrow.textContent = '→';
+      wrap.append(label, arrow);
+      wrap.style.right = window.innerWidth - rect.left + GAP + 'px';
+      wrap.style.top = rect.top + rect.height / 2 + 'px';
+    }
+    document.body.appendChild(wrap);
+    requestAnimationFrame(() => wrap.classList.add('show')); // плавное появление
+    let killed = false;
+    const dismiss = () => {
+      if (killed) return;
+      killed = true;
+      wrap.classList.remove('show');
+      setTimeout(() => wrap.remove(), 600); // дать доиграть fade-out
+    };
+    setTimeout(dismiss, holdMs);
+    return dismiss;
+  }
+
+  // Подсказку про вращение показываем ровно один раз — при первом взятии напольного
+  // предмета. dismissRotateTip убирает стрелку, если предмет поставили/убрали раньше.
+  let rotateTipShown = false;
+  let dismissRotateTip = null;
+
   return {
     setComfort,
     showHint,
@@ -363,6 +417,25 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
       else if (state === 'placing') showHint(t('ui.hint_place'));
       else if (state === 'placingWall') showHint(t('ui.hint_place_wall'));
       else showHint(t('ui.hint_pickup'));
+      // Первый напольный предмет «в руке» — один раз подсказываем про поворот стрелкой
+      // на кнопку «Повернуть». Настенные не вращаются (placingWall) — там не показываем.
+      if (state === 'placing' && !rotateTipShown) {
+        rotateTipShown = true;
+        dismissRotateTip = showPointer(rotateBtn, t('ui.tip_rotate'), 'left');
+      } else if (state !== 'placing' && dismissRotateTip) {
+        dismissRotateTip();
+        dismissRotateTip = null;
+      }
+    },
+    // Стрелка-подсказка на журнал заданий (game.js зовёт в начале — после приветствия)
+    pointToQuests() {
+      showPointer(questsBox, t('ui.tip_quests'), 'right');
+    },
+    // Стрелка-подсказка на кнопку режима любования (game.js зовёт после ремонта).
+    // 'below-right': глаз в самом углу — стрелка ↑ строго под ним, подпись уходит влево
+    // (не путается с соседней кнопкой звука, как было бы у боковой стрелки).
+    pointToCinema() {
+      showPointer(cinemaBtn, t('ui.tip_cinema'), 'below-right');
     },
     // Изменить количество предмета в ячейке (взяли из ячейки −1, вернули +1)
     changeCount(id, delta) {

@@ -3,22 +3,22 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=69';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=69';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=69';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=69';
-import { createPlacement } from './placement.js?v=69';
-import { createUI } from './ui.js?v=69';
-import { renderItemIcon } from './icon.js?v=69';
-import { createPower } from './power.js?v=69';
-import { evaluateCombos } from './combos.js?v=69';
-import { isQuestDone } from './quests.js?v=69';
-import { createCat } from './cat.js?v=69';
-import { createLighting } from './lighting.js?v=69';
-import { createBloom } from './bloom.js?v=69';
-import { createFog } from './fog.js?v=69';
-import { createMusic } from './music.js?v=69';
-import { createCinema } from './cinema.js?v=69';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=71';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=71';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=71';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=71';
+import { createPlacement } from './placement.js?v=71';
+import { createUI } from './ui.js?v=71';
+import { renderItemIcon } from './icon.js?v=71';
+import { createPower } from './power.js?v=71';
+import { evaluateCombos } from './combos.js?v=71';
+import { isQuestDone } from './quests.js?v=71';
+import { createCat } from './cat.js?v=71';
+import { createLighting } from './lighting.js?v=71';
+import { createBloom } from './bloom.js?v=71';
+import { createFog } from './fog.js?v=71';
+import { createMusic } from './music.js?v=71';
+import { createCinema } from './cinema.js?v=71';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -451,8 +451,16 @@ async function init() {
     if (renoDone.floor && renoDone.walls) {
       ui.setLocked(unlockAfterReno, false); // ремонт готов — мебель доступна (кроме удлинителя)
       // Трогательная история про отсутствие потолочного света + первый квест: «принеси свет».
-      // Очередь модалов: «✓ обои» → эта история → подсказка-тост (см. ui.showModal — очередь).
+      // Очередь модалов: «✓ обои» → эта история → совет «рисуй светом» → (по закрытии)
+      // стрелка на «глаз» любования → подсказка-тост (см. ui.showModal — очередь).
       ui.showModal(t(locale, 'ui.first_light_text'), t(locale, 'ui.first_light_kicker'), t(locale, 'ui.first_light_ok'));
+      // Геймплейный совет: расставлять светящиеся предметы островками по всей комнате,
+      // «как художник кистью». Идёт сразу за «первым светом» — когда мебель уже открыта.
+      // По закрытии — мягкая стрелка на режим любования (теперь есть чем любоваться).
+      ui.showModal(
+        t(locale, 'ui.light_tip_text'), t(locale, 'ui.light_tip_kicker'), null,
+        () => ui.pointToCinema()
+      );
       ui.showHint(t(locale, 'ui.hint_reno_done'));
     } else {
       ui.showHint(
@@ -639,10 +647,11 @@ async function init() {
 
   // Приветствие — показывается ВТОРЫМ, сразу после выбора звука (думерское, с первыми
   // делами). Закрыл приветствие → на несколько секунд загораются стрелки над кучами
-  // мусора (подсказка для новичка, что первый шаг — убрать мусор).
+  // мусора (первый шаг — убрать мусор) И стрелка на журнал заданий слева (что есть
+  // дела по дому и их надо выполнять по порядку).
   ui.showModal(
     t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'),
-    showDebrisArrows
+    () => { showDebrisArrows(); ui.pointToQuests(); }
   );
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
