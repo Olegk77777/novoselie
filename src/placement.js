@@ -383,9 +383,12 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
     scene.remove(item);
     placedItems.splice(placedItems.indexOf(item), 1);
     const itemDef = item.userData.def;
+    let host = null;
     if (item.userData.host) {
-      // Снимаем с поверхности — освобождаем «хозяина»
-      item.userData.host.userData.occupant = null;
+      // Снимаем с поверхности — освобождаем «хозяина», но запоминаем его,
+      // чтобы вернуть призрак ему на верх (а не в центр комнаты)
+      host = item.userData.host;
+      host.userData.occupant = null;
     } else if (item.userData.keys) {
       // Напольный предмет — освобождаем его клетки
       const set = occupied[layerOf(itemDef)];
@@ -393,12 +396,14 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
     }
     // Настенный предмет коллизий в Set не держит — достаточно убрать из placedItems
     onLayoutChange(placedItems);
-    startPlacing(itemDef, item.userData.rotationSteps, item.userData.anchor ?? null);
+    startPlacing(itemDef, item.userData.rotationSteps, item.userData.anchor ?? null, host);
     reportComfort();
   }
 
-  // Взять предмет «в руку» (из ячейки или после подбора с пола)
-  function startPlacing(itemDef, steps = 0, anchor = null) {
+  // Взять предмет «в руку» (из ячейки или после подбора с пола).
+  // host — «хозяин»-поверхность, если предмет снят с тумбы/стола: призрак
+  // вернётся ему на верх, а не упрыгнет в центр комнаты.
+  function startPlacing(itemDef, steps = 0, anchor = null, host = null) {
     if (ghost) return; // уже что-то в руке
     def = itemDef;
     rotationSteps = steps;
@@ -416,6 +421,16 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
       ghost.rotation.y = spot.surface.rotationY;
       targetRotY = spot.surface.rotationY;
       tintGhost(wallState.free);
+      onStateChange('placing', def.id);
+      return;
+    }
+
+    // Предмет сняли с поверхности — возвращаем призрак ровно на ту же тумбу/стол,
+    // чтобы его было удобно повернуть и поставить обратно (а не ловить в центре пола).
+    if (host) {
+      mountTarget = host;
+      ghost.position.set(host.position.x, host.userData.def.surfaceHeight, host.position.z);
+      tintGhost(true);
       onStateChange('placing', def.id);
       return;
     }
