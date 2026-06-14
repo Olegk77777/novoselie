@@ -34,15 +34,18 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
   const A_BOB = 0.04 * M;                            // вертикальное оседание кадра (heave)
   const A_ZOOM = 0.025 * M;                          // зум-бриз ±2.5%
 
-  // Дрейф точки внимания: камера медленно «наводится» на окно / тёплый прибор / кота и
-  // держит якорь ~46 c. Пан мягкий (доля пути к якорю), чтобы комната не уезжала за кадр.
-  const DRIFT = 0.32 * M;       // доля пути к якорю
-  const FOCUS_ZOOM = 0.05 * M;  // лёгкий наезд при наводке на предмет
-  const HOLD = 46;              // секунд на одном якоре
-  let anchors = [];
-  let anchorIdx = 0;
+  // Дрейф точки внимания: ДОМ — центр комнаты. Камера ненадолго мягко наклоняется к
+  // предмету (окно/прибор/кот) и ВОЗВРАЩАЕТСЯ в центр — чередуем «объект ↔ центр», чтобы
+  // кадр не парковался в углу. Пан очень мягкий (комната не уезжает), без наезда зумом
+  // (масштаб-дрейф давал бы мелькание тонкой рамы окна).
+  const DRIFT = 0.15 * M;       // доля пути к предмету — лёгкий наклон, не переезд
+  const HOLD = 16;              // секунд на точке (объект / возврат в центр)
+  let objects = [];             // якоря-предметы из game.js (окно/приборы/кот)
+  let objIdx = 0;
+  let goCenter = false;         // следующий переход — в центр? (чередуем объект↔центр)
+  let curTarget = { x: 0, z: 0 };
   let switchT = 0;
-  const pivot = { x: 0, z: 0 }; // текущее смещение взгляда (мир), плавно догоняет якорь
+  const pivot = { x: 0, z: 0 }; // текущее смещение взгляда (мир), плавно догоняет цель
 
   let weight = 0;       // 0 = игровая поза, 1 = полное дыхание; рампится плавно
   let active = false;   // включён ли режим
@@ -142,9 +145,12 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
     active = true;
     settled = false;
     lastSec = -1;
-    // Якоря дрейфа берём из текущей расстановки; начинаем с окна (первый в списке).
-    anchors = getFocusAnchors ? (getFocusAnchors() || []) : [];
-    anchorIdx = 0;
+    // Дрейф начинаем ИЗ ЦЕНТРА (без рывка на входе): комната просто встаёт по центру,
+    // первый мягкий наклон к предмету — только спустя HOLD секунд.
+    objects = getFocusAnchors ? (getFocusAnchors() || []) : [];
+    objIdx = 0;
+    goCenter = false;
+    curTarget = { x: 0, z: 0 };
     switchT = 0;
     // Титульная строка: выбираем одну (псевдослучайно по времени) и перезапускаем анимацию.
     if (cardLines.length) {
@@ -191,23 +197,27 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
     }
     settled = false;
 
-    // Дрейф точки внимания: раз в HOLD секунд берём следующий якорь (обновляя список —
-    // вдруг игрок что-то переставил). Цель пана — доля пути к якорю, зажата, чтобы не уехать.
+    // Дрейф точки внимания: раз в HOLD секунд меняем цель, ЧЕРЕДУЯ предмет и центр —
+    // камера ненадолго наклоняется к окну/прибору/коту и возвращается домой, в центр.
     let tx = 0, tz = 0;
     if (active) {
       switchT += d;
       if (switchT >= HOLD) {
         switchT = 0;
-        if (getFocusAnchors) anchors = getFocusAnchors() || [];
-        anchorIdx = anchors.length ? (anchorIdx + 1) % anchors.length : 0;
+        if (getFocusAnchors) objects = getFocusAnchors() || [];
+        if (goCenter || objects.length === 0) {
+          curTarget = { x: 0, z: 0 };   // возврат в центр
+          goCenter = false;
+        } else {
+          curTarget = objects[objIdx % objects.length]; // наклон к следующему предмету
+          objIdx = (objIdx + 1) % objects.length;
+          goCenter = true;
+        }
       }
-      if (anchors.length) {
-        const an = anchors[anchorIdx % anchors.length];
-        tx = Math.max(-1.6, Math.min(1.6, an.x * DRIFT));
-        tz = Math.max(-1.6, Math.min(1.6, an.z * DRIFT));
-      }
+      tx = Math.max(-1.0, Math.min(1.0, curTarget.x * DRIFT));
+      tz = Math.max(-1.0, Math.min(1.0, curTarget.z * DRIFT));
     }
-    // плавная наводка взгляда к якорю (медленно, ~3 c) — экспоненциальное сглаживание
+    // плавная наводка взгляда к цели (медленно, ~3 c) — экспоненциальное сглаживание
     const pk = 1 - Math.pow(0.7, d);
     pivot.x += (tx - pivot.x) * pk;
     pivot.z += (tz - pivot.z) * pk;
@@ -218,10 +228,8 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
     const px = pivot.x * w, pz = pivot.z * w;                  // пан к точке внимания (×weight)
     camera.position.set(R * Math.cos(az) + px, 10 + targetY + bob, R * Math.sin(az) + pz);
     camera.lookAt(px, targetY + bob, pz);                      // сдвиг eye+target = чистый пан, угол тот же
-    const focusMag = Math.min(1, Math.hypot(pivot.x, pivot.z) / 1.5);
-    const zMul = (1 + A_ZOOM * w * (0.6 * Math.sin(time / 17.3) + 0.4 * Math.sin(time / 41.0)))
-               * (1 + FOCUS_ZOOM * w * focusMag);              // лёгкий наезд при наводке
-    camera.zoom = getBaseZoom() * zMul;                        // пишем зум ПОСЛЕДНИМ за кадр
+    const zMul = 1 + A_ZOOM * w * (0.6 * Math.sin(time / 17.3) + 0.4 * Math.sin(time / 41.0));
+    camera.zoom = getBaseZoom() * zMul;                        // пишем зум ПОСЛЕДНИМ за кадр (без наезда — рама не мелькает)
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld(true);
 
