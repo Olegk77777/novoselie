@@ -3,21 +3,21 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=63';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=63';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=63';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=63';
-import { createPlacement } from './placement.js?v=63';
-import { createUI } from './ui.js?v=63';
-import { renderItemIcon } from './icon.js?v=63';
-import { createPower } from './power.js?v=63';
-import { evaluateCombos } from './combos.js?v=63';
-import { isQuestDone } from './quests.js?v=63';
-import { createCat } from './cat.js?v=63';
-import { createLighting } from './lighting.js?v=63';
-import { createBloom } from './bloom.js?v=63';
-import { createFog } from './fog.js?v=63';
-import { createMusic } from './music.js?v=63';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=64';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=64';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=64';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=64';
+import { createPlacement } from './placement.js?v=64';
+import { createUI } from './ui.js?v=64';
+import { renderItemIcon } from './icon.js?v=64';
+import { createPower } from './power.js?v=64';
+import { evaluateCombos } from './combos.js?v=64';
+import { isQuestDone } from './quests.js?v=64';
+import { createCat } from './cat.js?v=64';
+import { createLighting } from './lighting.js?v=64';
+import { createBloom } from './bloom.js?v=64';
+import { createFog } from './fog.js?v=64';
+import { createMusic } from './music.js?v=64';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
