@@ -3,22 +3,22 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=72';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=72';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=72';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=72';
-import { createPlacement } from './placement.js?v=72';
-import { createUI } from './ui.js?v=72';
-import { renderItemIcon } from './icon.js?v=72';
-import { createPower } from './power.js?v=72';
-import { evaluateCombos } from './combos.js?v=72';
-import { isQuestDone } from './quests.js?v=72';
-import { createCat } from './cat.js?v=72';
-import { createLighting } from './lighting.js?v=72';
-import { createBloom } from './bloom.js?v=72';
-import { createFog } from './fog.js?v=72';
-import { createMusic } from './music.js?v=72';
-import { createCinema } from './cinema.js?v=72';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=73';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=73';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=73';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=73';
+import { createPlacement } from './placement.js?v=73';
+import { createUI } from './ui.js?v=73';
+import { renderItemIcon } from './icon.js?v=73';
+import { createPower } from './power.js?v=73';
+import { evaluateCombos } from './combos.js?v=73';
+import { isQuestDone } from './quests.js?v=73';
+import { createCat } from './cat.js?v=73';
+import { createLighting } from './lighting.js?v=73';
+import { createBloom } from './bloom.js?v=73';
+import { createFog } from './fog.js?v=73';
+import { createMusic } from './music.js?v=73';
+import { createCinema } from './cinema.js?v=73';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -416,11 +416,13 @@ async function init() {
     if (key === 'walls') return renoDone.window && !renoDone.walls;
     return false;
   };
-  // Модал «выполнено» для этапа ремонта + обновление журнала
-  function completeRenoStep(key) {
+  // Модал «выполнено» для этапа ремонта + обновление журнала.
+  // onClose — необязательный колбэк по закрытию модалки (напр. показать стрелку на задания
+  // ПОСЛЕ уборки мусора, а не одновременно со стрелками на мусор — фидбек Олега).
+  function completeRenoStep(key, onClose) {
     const step = renoSteps.find((s) => s.key === key);
     // В журнале шаг — короткое имя (textKey); в модалке «выполнено» — выплата-кадр новеллы (doneKey)
-    ui.showModal(t(locale, step.doneKey || step.textKey), t(locale, 'ui.quest_done_kicker'));
+    ui.showModal(t(locale, step.doneKey || step.textKey), t(locale, 'ui.quest_done_kicker'), undefined, onClose);
     refreshQuestsUI();
   }
 
@@ -521,7 +523,9 @@ async function init() {
       renoComfort += DEBRIS_COMFORT;
       refreshComfort();
       ui.setLocked(['reno_window'], false); // открываем «вставить окно»
-      completeRenoStep('debris'); // модал «✓ выполнено» + обновить журнал
+      // Модал «✓ мусор убран», а по его закрытии — стрелка на журнал заданий. Так подсказка
+      // про задания не наслаивается на стрелки-указатели мусора в начале (фидбек Олега).
+      completeRenoStep('debris', () => ui.pointToQuests());
       ui.showHint(t(locale, 'ui.hint_reno_window'));
     }
   }
@@ -647,11 +651,11 @@ async function init() {
 
   // Приветствие — показывается ВТОРЫМ, сразу после выбора звука (думерское, с первыми
   // делами). Закрыл приветствие → на несколько секунд загораются стрелки над кучами
-  // мусора (первый шаг — убрать мусор) И стрелка на журнал заданий слева (что есть
-  // дела по дому и их надо выполнять по порядку).
+  // мусора (первый шаг — убрать мусор). Стрелка на журнал заданий появится ПОЗЖЕ —
+  // когда мусор убран (см. removeDebrisAt), чтобы две подсказки не лезли разом.
   ui.showModal(
     t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'),
-    () => { showDebrisArrows(); ui.pointToQuests(); }
+    showDebrisArrows
   );
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
