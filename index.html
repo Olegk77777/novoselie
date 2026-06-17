@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=82">
-  <link rel="stylesheet" href="design/type.css?v=82">
+  <link rel="stylesheet" href="design/colors.css?v=83">
+  <link rel="stylesheet" href="design/type.css?v=83">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -723,6 +723,49 @@
       100% { background-position: 0 0; }
     }
 
+    /* ============================================================
+       ПЛЁНОЧНОЕ ЗЕРНО — ПОСТОЯННЫЙ слой поверх всей игры (благородное крупное).
+       Это CSS-оверлей, а НЕ проход 3D-движка: браузер смешивает готовый кадр с
+       тайлом зерна на видеокарте почти бесплатно — ни одного лишнего прохода рендера
+       (iPad-safe, не греет систему — тот же приём, что у кино-слоёв режима любования).
+       Тайл бесшовный, монохромный (серебро, не цветной цифровой шум).
+       z-index 2: ПОВЕРХ холста игры (0), но ПОД функциональным UI (5+), кино-полосами (4)
+       и модалками (20). pointer-events:none — клики идут сквозь зерно к сцене. */
+    #film-grain {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      background: url('textures/film_grain.png') repeat;
+      background-size: 256px 256px;   /* крупность зерна на экране (крупнее тайла → крупнее зерно) */
+      mix-blend-mode: overlay;        /* зерно осветляет/затемняет, не перекрашивает */
+      opacity: 0.18;                  /* благородно: фактура видна на средних тонах и свету,
+                                         в глубоких тенях деликатна (как настоящая плёнка).
+                                         Хочешь сильнее/слабее — крути это одно число (0.10–0.26). */
+      will-change: background-position;
+    }
+    /* Живое «кипение» зерна (как настоящая плёнка/проектор) — лёгкий сдвиг тайла ~10 fps.
+       Сдвиги некратны тайлу (256) → повтор позиции не читается. */
+    #film-grain { animation: film-grain 0.9s steps(1) infinite; }
+    @keyframes film-grain {
+      0%   { background-position: 0 0; }
+      11%  { background-position: -37px 19px; }
+      22%  { background-position: 23px -47px; }
+      33%  { background-position: -61px -13px; }
+      44%  { background-position: 31px 43px; }
+      55%  { background-position: -17px 59px; }
+      66%  { background-position: 49px -31px; }
+      77%  { background-position: -43px -53px; }
+      88%  { background-position: 13px -23px; }
+      100% { background-position: 0 0; }
+    }
+    /* Слабое железо (ретина+сенсор ≈ iPad): зерно СТАТИЧНО — анимация полноэкранного
+       blend-слоя единственный заметный расход; статичное зерно почти неотличимо.
+       Класс body.cine-lowend ставит cinema.js при старте (есть всегда). */
+    body.cine-lowend #film-grain { animation: none; }
+    /* Уважение к prefers-reduced-motion — тоже без «кипения». */
+    @media (prefers-reduced-motion: reduce) { #film-grain { animation: none; } }
+
     /* VHS-датакод в нижнем поле letterbox: ●REC + дата (вечный ноябрь) + часы суток. */
     #cine-osd {
       position: fixed;
@@ -856,7 +899,9 @@
 </head>
 <body>
   <div id="error-overlay"></div>
+  <!-- Плёночное зерно: постоянный слой поверх всей игры (стиль и CSS — см. #film-grain выше) -->
+  <div id="film-grain" aria-hidden="true"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=82"></script>
+  <script type="module" src="src/game.js?v=83"></script>
 </body>
 </html>
