@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=83">
-  <link rel="stylesheet" href="design/type.css?v=83">
+  <link rel="stylesheet" href="design/colors.css?v=84">
+  <link rel="stylesheet" href="design/type.css?v=84">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -759,10 +759,29 @@
       88%  { background-position: 13px -23px; }
       100% { background-position: 0 0; }
     }
-    /* Слабое железо (ретина+сенсор ≈ iPad): зерно СТАТИЧНО — анимация полноэкранного
-       blend-слоя единственный заметный расход; статичное зерно почти неотличимо.
+    /* Слабое железо (ретина+сенсор ≈ iPad): ОБЛЕГЧЁННОЕ «кипение».
+       На Маке зерно «кипит» сдвигом background-position — на iOS Safari это рискованно
+       (перерисовка полноэкранного blend-слоя через CPU = нагрев). Здесь двигаем слой
+       через transform: translate3d — composite-only операция (GPU переставляет уже
+       готовую текстуру, БЕЗ перерисовки), плюс кадры вдвое реже (~6 fps). Слой растянут
+       с запасом (inset -24px), чтобы сдвиг не оголил края экрана.
        Класс body.cine-lowend ставит cinema.js при старте (есть всегда). */
-    body.cine-lowend #film-grain { animation: none; }
+    body.cine-lowend #film-grain {
+      inset: -24px;
+      will-change: transform;
+      animation: film-grain-lite 1.4s steps(1) infinite;
+    }
+    @keyframes film-grain-lite {
+      0%   { transform: translate3d(0, 0, 0); }
+      12%  { transform: translate3d(-13px, 7px, 0); }
+      25%  { transform: translate3d(9px, -15px, 0); }
+      37%  { transform: translate3d(-17px, -5px, 0); }
+      50%  { transform: translate3d(11px, 13px, 0); }
+      62%  { transform: translate3d(-7px, 17px, 0); }
+      75%  { transform: translate3d(15px, -9px, 0); }
+      87%  { transform: translate3d(-11px, -13px, 0); }
+      100% { transform: translate3d(0, 0, 0); }
+    }
     /* Уважение к prefers-reduced-motion — тоже без «кипения». */
     @media (prefers-reduced-motion: reduce) { #film-grain { animation: none; } }
 
@@ -902,6 +921,6 @@
   <!-- Плёночное зерно: постоянный слой поверх всей игры (стиль и CSS — см. #film-grain выше) -->
   <div id="film-grain" aria-hidden="true"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=83"></script>
+  <script type="module" src="src/game.js?v=84"></script>
 </body>
 </html>
