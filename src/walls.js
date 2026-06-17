@@ -436,17 +436,22 @@ vec3 moonRender(vec2 uv, float phase, float moonFull, float nightF, float clarit
   float seas = mix(0.80, 1.0, smoothstep(0.35, 0.85, maria));
   float limb = mix(0.78, 1.0, smoothstep(rad, rad * 0.2, r));
 
-  vec3 moonCol = mix(vec3(0.78, 0.82, 0.90), vec3(0.92, 0.92, 0.86), moonFull);
+  vec3 moonCol = mix(vec3(0.74, 0.80, 0.92), vec3(0.90, 0.91, 0.88), moonFull); // серебро чуть холоднее
   vec3 body = moonCol * seas * limb;
 
-  float haloR = mix(0.20, 0.52, moonFull);   // шире гало вокруг крупной луны
-  float halo  = smoothstep(haloR, 0.0, r);
-  halo = pow(halo, 1.5);
+  // двухслойное гало: тугое яркое ядро ореола + широкий мягкий, тонущий в небе (как фонарь в реф-снеге)
+  float haloR  = mix(0.20, 0.52, moonFull);                  // шире гало вокруг крупной луны
+  float haloIn = pow(smoothstep(haloR * 0.45, 0.0, r), 2.0); // тугое яркое ядро
+  float haloOut= pow(smoothstep(haloR, 0.0, r), 1.4);        // широкий мягкий ореол
   float haloAmt = (0.14 + 0.80 * moonFull) * clarity;
   vec3 haloCol = vec3(0.55, 0.66, 0.85);
 
+  // тёплый ободок диска у края серпа — тонкая «земная» подсветка лимба (только на неполной луне)
+  float rim = smoothstep(rad * 1.02, rad * 0.86, r) * (1.0 - lit) * (1.0 - moonFull);
+
   vec3 outc = body * lit
-            + haloCol * halo * haloAmt * nightF;
+            + haloCol * (haloOut * 0.6 + haloIn * 0.5) * haloAmt * nightF
+            + vec3(0.50, 0.42, 0.40) * rim * 0.22 * nightF;
 
   // глобальный световой вектор — смещение луны от центра кадра.
   // Стабилен на весь кадр (не зависит от шейдингового пикселя),
@@ -474,6 +479,13 @@ vec3 starField(vec2 uv, float t){
     float tw = 0.55 + 0.45 * sin(t * (1.6 + seed * 2.4) + seed * TAU * 6.0);
     vec3 tint = mix(vec3(0.86, 0.90, 1.0), vec3(1.0, 0.90, 0.78), step(0.92, seed));
     acc += tint * core * tw;
+    // редкие крупные «бриллианты» с мягким крестовым бликом — только на слое 0 (≈1.5% звёзд)
+    if (step(0.985, seed) * (1.0 - fl) > 0.5) {
+      vec2 dj = fp - jit;
+      float cross = smoothstep(0.10, 0.0, abs(dj.x)) * smoothstep(0.020, 0.0, abs(dj.y))
+                  + smoothstep(0.10, 0.0, abs(dj.y)) * smoothstep(0.020, 0.0, abs(dj.x));
+      acc += tint * cross * 0.6 * tw;
+    }
   }
   float band = smoothstep(0.55, 0.0, abs((uv.y - 0.62) - (uv.x - 0.5) * 0.35));
   vec2 ng = floor(uv * vec2(40.0, 26.0));
@@ -494,10 +506,15 @@ float moonWashAmount(float moonFull, float nightF, float clarity){
 vec3 skyGradient(vec2 uv, float dayF, float nightF, float duskMix,
                  vec3 seasonTint, float moonWash){
   float g = smoothstep(0.0, 1.0, uv.y);
-  vec3 night = mix(vec3(0.085,0.090,0.170), vec3(0.020,0.022,0.060), g);
+  // ночь чуть глубже у зенита — звёзды и луна читаются контрастнее
+  vec3 night = mix(vec3(0.085,0.090,0.175), vec3(0.014,0.016,0.052), g);
   vec3 day   = mix(vec3(0.700,0.710,0.700), vec3(0.420,0.500,0.620), g);
-  vec3 dusk  = mix(vec3(0.960,0.500,0.280), vec3(0.200,0.130,0.330),
-                   smoothstep(0.0,0.85,uv.y));
+  // трёхстоповый закат (реф-закусочная): тёплая полоса у горизонта → магента → холодный индиго-верх
+  vec3 duskLow = vec3(1.00, 0.62, 0.36); // тёплая узкая полоса у горизонта
+  vec3 duskMid = vec3(0.66, 0.30, 0.46); // пурпур/магента — сердце заката
+  vec3 duskTop = vec3(0.14, 0.12, 0.30); // холодный индиго зенит
+  vec3 dusk = mix(duskMid, duskLow, smoothstep(0.30, 0.0, uv.y));
+  dusk = mix(dusk, duskTop, smoothstep(0.30, 0.85, uv.y));
   vec3 col = mix(night, day, dayF);
   col = mix(col, dusk, duskMix*0.75);
   // холодный лунный налёт высоко в ночном небе (ярче — крупная луна сильнее «светит»)
@@ -541,6 +558,7 @@ vec4 cityLayer(vec2 uv, float layer, float baseY, float blockW,
   vec3 facade = mix(cDark, cLit, edge);
   float vshade = mix(0.78, 1.06, smoothstep(baseY-0.04, roofY, uv.y));
   facade *= vshade;
+  facade *= mix(1.0, 0.62, far); // дальний слой → почти плоский тёмный силуэт-аппликация
   facade += vec3(0.18,0.09,0.05) * duskMix * smoothstep(0.6,1.0,fb) * (0.4+0.6*near);
 
   // горизонтальные межпанельные швы
@@ -568,10 +586,12 @@ vec4 cityLayer(vec2 uv, float layer, float baseY, float blockW,
   pane *= step(baseY, uv.y) * cover;
 
   float wseed = hash(wcell + bi*17.0 + layer*3.0);
-  float litChance = mix(0.30, 0.62, density) * (0.55 + 0.45*near);
+  float litChance = mix(0.26, 0.52, density) * (0.55 + 0.45*near); // чуть меньше горящих — спокойнее двор
   float lit = step(1.0 - litChance, wseed);
-  // редкий «синий телевизор» — реже и медленнее, чтобы не было строб-эффекта
-  float tvWin = step(0.94, hash(wcell + 91.0));
+  // тип окна: ХОЛОДНЫЙ дежурный свет (лестница/кухня) — доминанта (реф-панелька «Все будет хорошо»);
+  // тёплый — редкая драгоценная точка; синий «телевизор» — ещё реже.
+  float warmWin = step(0.70, hash(wcell + bi*23.0 + 3.0)); // ~30% тёплых
+  float tvWin = step(0.93, hash(wcell + 91.0));            // ~7% «телевизоров»
   float flick = 1.0, tvFlick = 1.0; // дефолты для дня (когда окна не горят)
   // Анимация окон города (мерцание накала, «синий телевизор», «кто-то не спит») — ТОЛЬКО ночью.
   // Днём nightF=0 → winNight = lit*nightF = 0 → вклад окон ноль независимо от мерцания, а ~12
@@ -585,19 +605,21 @@ vec4 cityLayer(vec2 uv, float layer, float baseY, float blockW,
     float prevOn = step(0.5, hash1(floor(tph) - 1.0 + wseed*23.0));
     float toggleOn = mix(prevOn, curOn, smoothstep(0.0, 0.05, fract(tph))); // мягкий переход
     lit = mix(lit, toggleOn, toggleWin);
-    flick = 0.92 + 0.08*sin(uTime*1.7 + wseed*40.0);
+    flick = mix(1.0, 0.92 + 0.08*sin(uTime*1.7 + wseed*40.0), warmWin); // мерцает только тёплый накал
     tvFlick = 0.6 + 0.4*sin(uTime*3.0 + wseed*12.0);
   }
-  vec3 warm = vec3(1.00,0.74,0.38);
-  vec3 tv   = vec3(0.40,0.52,0.72);   // приглушённый холодный, в палитре
-  vec3 winLight = mix(warm, tv, tvWin);
+  vec3 cold = vec3(0.52,0.60,0.74);   // холодный дежурный свет — ГЛАВНЫЙ тон окон
+  vec3 warm = vec3(1.00,0.74,0.40);   // тёплый — редкая драгоценная точка
+  vec3 tv   = vec3(0.40,0.52,0.72);   // приглушённый синий «телевизор»
+  vec3 winLight = mix(cold, warm, warmWin);
+  winLight = mix(winLight, tv, tvWin);
   float winFlick = mix(flick, tvFlick, tvWin);
 
   float skyLumDir = smoothstep(0.0,1.0,fb);
   vec3 dayGlass = mix(facade*0.55, skyRef*0.7, 0.35 + 0.25*skyLumDir);
   vec3 nightWin = winLight * winFlick;
 
-  float winNight = lit * nightF * (0.92 - 0.45*far);
+  float winNight = lit * nightF * (0.92 - 0.60*far); // дальние окна почти гаснут → чистый силуэт
   facade = mix(facade, dayGlass, pane*dayF*0.9);
   facade = mix(facade, nightWin, pane*winNight);
 
@@ -676,6 +698,10 @@ vec3 cityscape(vec2 uv, vec3 col, float dayF, float nightF, float duskMix,
   vec4 L2 = cityLayer(uv, 2.0, 0.125, 0.230, 0.80,
                       dayF,nightF,duskMix, skyRef, seasonTint, snowF, moonWash, moonDirX);
   col = mix(col, L2.rgb, L2.a);
+
+  // тёплая засветка горизонта на закате — небо «дышит» за тёмным городом (реф-закусочная)
+  float horizonGlow = smoothstep(0.42, 0.10, uv.y) * smoothstep(0.0, 0.10, uv.y);
+  col += vec3(0.40, 0.16, 0.10) * horizonGlow * duskMix * 0.32;
 
   float wires = powerLines(uv, 0.125);
   col = mix(col, vec3(0.030,0.030,0.050), wires*0.75);

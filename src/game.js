@@ -3,23 +3,23 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=84';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=84';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=84';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=84';
-import { createPlacement } from './placement.js?v=84';
-import { createUI } from './ui.js?v=84';
-import { renderItemIcon } from './icon.js?v=84';
-import { createPower } from './power.js?v=84';
-import { evaluateCombos } from './combos.js?v=84';
-import { isQuestDone } from './quests.js?v=84';
-import { createCat } from './cat.js?v=84';
-import { createLighting } from './lighting.js?v=84';
-import { createHeightFog } from './heightfog.js?v=84';
-import { createBloom } from './bloom.js?v=84';
-import { createFog } from './fog.js?v=84';
-import { createMusic } from './music.js?v=84';
-import { createCinema } from './cinema.js?v=84';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=85';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=85';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=85';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes, NIGHT } from './items.js?v=85';
+import { createPlacement } from './placement.js?v=85';
+import { createUI } from './ui.js?v=85';
+import { renderItemIcon } from './icon.js?v=85';
+import { createPower } from './power.js?v=85';
+import { evaluateCombos } from './combos.js?v=85';
+import { isQuestDone } from './quests.js?v=85';
+import { createCat } from './cat.js?v=85';
+import { createLighting } from './lighting.js?v=85';
+import { createHeightFog } from './heightfog.js?v=85';
+import { createBloom } from './bloom.js?v=85';
+import { createFog } from './fog.js?v=85';
+import { createMusic } from './music.js?v=85';
+import { createCinema } from './cinema.js?v=85';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -766,12 +766,21 @@ async function init() {
     // времени (день холодный → закат янтарь → ночь тьма + серебро луны → дождь свинец).
     // update() заодно отдаёт параметры Bloom (ярче ночью/в полнолуние).
     let bloomParams = lighting.update(time, !!windowGlass);
+    // Ночность сцены → светящийся-в-темноте декор (флуор-ковёр). Берём канонические nightF/moonWash
+    // из того же расчёта, что свет (lighting.js), а не считаем свои — ковёр разгорается в фазе с ночью.
+    // ДО cinema-пересборки bloomParams (она роняет эти поля) и до прохода tickables.
+    NIGHT.f = bloomParams.nightF || 0;
+    NIGHT.moon = bloomParams.moonWash || 0;
     // Воздушная перспектива: цвет/плотность дымки дальней стены из того же расчёта, что свет
     // окна (SYNC). hazeColor уже в линейном рабочем пространстве (ColorManagement), врезка в
     // шейдере идёт до тон-маппинга — конверсия не нужна. Уют слегка проясняет комнату (как
     // туман-фон fog.js: тот же fogClear). Делаем ДО cinema-пересборки bloomParams (она роняет haze).
     heightFog.u.uHazeColor.value.copy(bloomParams.hazeColor);
-    heightFog.u.uHazeAmt.value = bloomParams.hazeAmt * (1 - 0.4 * fogClear);
+    // Мгла ВНУТРИ комнаты уходит от уюта СЛАБЕЕ, чем туман-фон снаружи (0.4→0.25): даже обжитая
+    // комната держит думерскую дымку в углах. Время — для клубления; дальний угол (окно/дверь) гуще.
+    heightFog.u.uHazeAmt.value = bloomParams.hazeAmt * (1 - 0.25 * fogClear);
+    heightFog.u.uTime.value = time;
+    heightFog.u.uHazeFar.value = 0.55;
     // Режим любования: свечение еле «дышит» в фазе с зум-бризом. Копируем объект — lighting
     // переиспользует bloomState и пересчитывает его раз в 4 кадра, мутировать на месте нельзя.
     if (document.body.classList.contains('cinema')) {

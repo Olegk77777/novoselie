@@ -9,9 +9,12 @@
 // ПОЧЕМУ НЕ scene.fog. Камера ОРТОграфическая и зафиксирована. Дистанционный туман красил
 // бы дальнюю ПОЛОВИНУ пола и дальние линии сетки ровно так же, как дальнюю стену, — то есть
 // бил бы по читаемости расстановки там же, где наращивает атмосферу. Поэтому глубину ставим
-// ВЕРТИКАЛЬНО — по мировой высоте Y: пол (y=0), линии сетки и низ мебели остаются кристально
-// чистыми ВСЕГДА, а к дымке уходят только верх стен и дальняя стена (они физически выше в
-// кадре). Это ровно референс «авто в тумане»: низ детальный, верх/даль растворяется.
+// ВЕРТИКАЛЬНО — по мировой высоте Y: плоскость пола (y=0) и линии сетки остаются кристально
+// чистыми ВСЕГДА (сетка — THREE.Line, врезкой не одевается вовсе), а к дымке уходят верх стен и
+// дальняя стена (физически выше в кадре). Это ровно референс «авто в тумане»: низ детальный,
+// верх/даль растворяется. ДОБАВЛЕНО (запрос Олега «туман заползает внутрь»): в ДАЛЬНЕМ от камеры
+// углу (у окна/двери) дымка дополнительно натекает на НИЖНИЕ стены/мебель чуть выше пола (член
+// hfFar с маской hfFarMask, которая гаснет у самой плоскости пола — клетки расстановки чисты).
 //
 // КАК УСТРОЕНО. material.onBeforeCompile врезает в фрагментный шейдер стандартного
 // MeshLambertMaterial подмешивание цвета дымки по мировой высоте Y фрагмента:
@@ -37,15 +40,19 @@ import * as THREE from 'three';
 
 export function createHeightFog() {
   // Общий объект юниформов на ВСЕ материалы (game.js обновляет color/amt из lighting.js).
-  // uYLow/uYHigh — диапазон высот набора дымки: ниже uYLow дымки нет (пол, сетка, низ мебели),
-  // выше uYHigh — максимум. ШИРОКАЯ полоса (0.5..3.6) — переход «дымка → чисто» намного плавнее
-  // (нет заметной границы). uYHigh ВЫШЕ верха стен (WALL_HEIGHT=2.5) НАРОЧНО: верх стены не
-  // добирает дымку до полной → вверху прозрачнее (запрос Олега). yLow держит пол и низ мебели чистыми.
+  // uYLow/uYHigh — диапазон высот набора дымки: ниже uYLow дымки нет, выше uYHigh — максимум.
+  // uYLow ОПУЩЕН к полу (0.25), чтобы мгла «заползала» снизу (запрос Олега «туман даже внутрь»),
+  // но сам пол (плоскость y=0) и линии сетки остаются чистыми: пол даёт smoothstep(0.25,..,0)=0,
+  // а сетка — THREE.Line (не Lambert) и врезкой не одевается вовсе → клетки читаются сквозь мглу.
+  // uHazeFar — доп. плотность в ДАЛЬНЕМ от камеры углу (там окно и дверь): туман натекает снаружи.
+  // uTime — лёгкое клубление дымки (один sin по XZ): мгла живёт, а не ровная пелена.
   const u = {
     uHazeColor: { value: new THREE.Color(0x182f3c) },
     uHazeAmt:   { value: 0.0 },
-    uYLow:      { value: 0.5 },
-    uYHigh:     { value: 3.6 },
+    uYLow:      { value: 0.25 },
+    uYHigh:     { value: 3.0 },
+    uTime:      { value: 0.0 },
+    uHazeFar:   { value: 0.0 },
   };
 
   // Какие материалы уже одеты — чтобы apply был идемпотентным и для шаренных материалов.
@@ -68,22 +75,33 @@ export function createHeightFog() {
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying float vHfWorldY;'
+          '#include <common>\nvarying float vHfWorldY;\nvarying vec2 vHfWorldXZ;'
         )
         .replace(
           '#include <begin_vertex>',
-          '#include <begin_vertex>\nvHfWorldY = (modelMatrix * vec4(transformed, 1.0)).y;'
+          '#include <begin_vertex>\n  vec3 vHfWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n  vHfWorldY = vHfWP.y;\n  vHfWorldXZ = vHfWP.xz;'
         );
 
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying float vHfWorldY;\n' +
-          'uniform vec3 uHazeColor;\nuniform float uHazeAmt;\nuniform float uYLow;\nuniform float uYHigh;'
+          '#include <common>\nvarying float vHfWorldY;\nvarying vec2 vHfWorldXZ;\n' +
+          'uniform vec3 uHazeColor;\nuniform float uHazeAmt;\nuniform float uYLow;\nuniform float uYHigh;\n' +
+          'uniform float uTime;\nuniform float uHazeFar;'
         )
         .replace(
           '#include <tonemapping_fragment>',
-          'float hfFactor = smoothstep(uYLow, uYHigh, vHfWorldY) * uHazeAmt;\n' +
+          // вертикаль: мгла набирается от пола вверх (плоскость пола y=0 → 0; низ мебели чистый)
+          'float hfH = smoothstep(uYLow, uYHigh, vHfWorldY);\n' +
+          // дальний от камеры угол (back-left: окно z≈-4 + дверь x≈-5) тонет сильнее — туман снаружи
+          '  float hfFar = clamp(0.5 + (-vHfWorldXZ.x) * 0.06 + (-vHfWorldXZ.y) * 0.075, 0.0, 1.0);\n' +
+          // дальний туман ГАСНЕТ у самой плоскости пола: у y=0 маска=0 → пол и сетка остаются чистыми
+          // (читаемость расстановки), мгла «заползает» лишь на нижние стены/мебель чуть ВЫШЕ пола
+          '  float hfFarMask = smoothstep(0.0, 0.6, vHfWorldY);\n' +
+          // дешёвое клубление (один sin по мировым XZ + время) — дымка живёт, не ровная пелена
+          '  float hfCurl = 0.86 + 0.14 * sin(vHfWorldXZ.x * 0.8 + vHfWorldXZ.y * 0.6 + uTime * 0.25);\n' +
+          '  float hfFactor = (hfH + uHazeFar * hfFar * hfFarMask * (1.0 - hfH) * 0.55) * uHazeAmt * hfCurl;\n' +
+          '  hfFactor = min(hfFactor, 0.62);\n' + // потолок: даже в углу не глухая стена (читаемость)
           '  gl_FragColor.rgb = mix(gl_FragColor.rgb, uHazeColor, hfFactor);\n' +
           '#include <tonemapping_fragment>'
         );

@@ -67,7 +67,7 @@ export function createLighting(scene, opts = {}) {
   // мягкий широкий спад. Без тени (единственный кастер — направленный win).
   const winSpill = new THREE.SpotLight(0xaecbf2, 0, 16, 1.0, 0.9, 1.0);
   winSpill.position.set(0, 2.8, -4.8); // над/за окном (дальняя стена z≈-4)
-  winSpill.target.position.set(0, 0, 0.8); // на пол, вглубь комнаты — поток достаёт дальше
+  winSpill.target.position.set(0, 0, 1.4); // на пол, глубже в комнату — поток ВЫТЯНУТ, пятно читается как из окна
   scene.add(winSpill.target);
   winSpill.castShadow = false;
   scene.add(winSpill);
@@ -99,6 +99,7 @@ export function createLighting(scene, opts = {}) {
   const C_RAIN = new THREE.Color(0x586781); // свинцовый дождь
   const C_MOON = new THREE.Color(0x9bb8f4); // серебро полнолуния — холоднее, синее
   const C_MOON_HEMI = new THREE.Color(0x6f86c4); // синий сдвиг рассеянного света в полнолуние
+  const C_MOON_SPILL = new THREE.Color(0x8fb0f0); // серебро-синь лунного ПЯТНА на полу (≈ гало луны в walls.js)
   const HEMI_NIGHT = new THREE.Color(0x515d7e); // ночной полумрак — синеватый, но комната ХОРОШО видна
   const HEMI_DAY = new THREE.Color(0x5e7090);
   // Воздушная перспектива (height-fog, src/heightfog.js): к этому синему void тянется дымка
@@ -117,6 +118,9 @@ export function createLighting(scene, opts = {}) {
   const bloomState = {
     strength: 0.5, threshold: 0.64, tint: [1, 1, 1],
     hazeColor: new THREE.Color(0x16202e), hazeAmt: 0.1,
+    // ночность для светящегося-в-темноте декора (флуор-ковёр): публикуем УЖЕ посчитанные
+    // канонические nightF/moonWash (не новая формула), game.js кладёт их в items.NIGHT.
+    nightF: 0, moonWash: 0,
   };
   function setBloom(strength, threshold, tr, tg, tb) {
     bloomState.strength = strength;
@@ -147,6 +151,7 @@ export function createLighting(scene, opts = {}) {
       // Лёгкая сине-циановая дымка даже в пустой коробке — дальняя стена чуть тонет в мгле.
       bloomState.hazeColor.setHex(0x182f3c);
       bloomState.hazeAmt = 0.11;
+      bloomState.nightF = 0; bloomState.moonWash = 0; // окна/ночи ещё нет — флуор-ковёр не светится
       return bloomState;
     }
 
@@ -192,21 +197,25 @@ export function createLighting(scene, opts = {}) {
     scratch.lerp(C_RAIN, rainRaw * 0.4);
     scratch.lerp(C_MOON, moonWash * 0.85); // в полнолуние свет заметно синеет
     win.color.copy(scratch);
-    winSpill.color.copy(scratch); // поток из окна — того же цвета, что оконный свет
+    // ВИДИМОЕ пятно на полу: лунной ночью домешиваем серебро-синь — пятно явно «лунное» (не общий цвет)
+    winSpill.color.copy(scratch).lerp(C_MOON_SPILL, moonWash * 0.6);
 
-    // --- яркость направленного окна (даёт форму и мягкую тень; в полнолуние — лунный ключ) ---
-    win.intensity = (2.0 * dayF * clarity + duskMix * 1.0 * clarity + moonWash * 1.1 + 0.06) * mood;
+    // --- яркость направленного окна (даёт форму и длинную хопперовскую тень; ночью — лунный ключ) ---
+    // День ярче (чётче трапеция тени мебели), лунная ночь сильнее (тень длиннее/выразительнее).
+    win.intensity = (2.3 * dayF * clarity + duskMix * 1.0 * clarity + moonWash * 1.6 + 0.06) * mood;
 
     // --- ВИДИМЫЙ поток из окна на пол — основная «масса» света от окна (decay 1, широкий).
-    //     Полная луна заметно сильнее заливает комнату синеватым светом. ---
-    winSpill.intensity = (16.0 * dayF * clarity + duskMix * 8.0 * clarity + moonWash * 7.5) * mood;
+    //     День — вытянутая солнечная полоса; полная луна заметно сильнее льёт серебро на пол. ---
+    winSpill.intensity = (17.5 * dayF * clarity + duskMix * 8.0 * clarity + moonWash * 9.5) * mood;
 
     // --- HEMI — мягкое рассеянное заполнение, покрывает всю комнату; дышит сутками.
     //     Ночная база высокая (0.95 — синие сумерки), чтобы комната была ВИДНА даже без
     //     зажжённых ламп; в полнолуние воздух синеет и светлеет ещё сильнее ---
-    hemi.intensity = 0.95 + 0.25 * dayF + 0.30 * moonWash;
+    // Рост HEMI под луной снижен (0.30→0.20) и подсин умереннее (0.5→0.45): рассеянный воздух
+    // не размывает контраст directional↔ambient — лунное серебро на полу читается, а не «плоское».
+    hemi.intensity = 0.95 + 0.25 * dayF + 0.20 * moonWash;
     scratch2.copy(HEMI_NIGHT).lerp(HEMI_DAY, dayF);
-    scratch2.lerp(C_MOON_HEMI, moonWash * 0.5);
+    scratch2.lerp(C_MOON_HEMI, moonWash * 0.45);
     hemi.color.copy(scratch2);
 
     // --- ФАРЫ за окном: только в режиме любования и ночью. Редкий проезд (период ~23 c,
@@ -249,7 +258,12 @@ export function createLighting(scene, opts = {}) {
       .multiplyScalar(0.9)
       .lerp(C_HAZE_VOID, nightF * 0.7)
       .lerp(C_HAZE_CYAN, 0.2); // примесь синевы/циана (запрос Олега)
-    bloomState.hazeAmt = 0.15 + 0.19 * nightF; // ночью гуще; чуть прозрачнее, чем было
+    // ГУЩЕ, чем было (запрос Олега «туман заползает даже внутрь»): база и ночной набор подняты.
+    // Потолок плотности и чистый пол держит сам heightfog.js (yLow над сеткой + cap во врезке).
+    bloomState.hazeAmt = 0.18 + 0.24 * nightF; // день ~0.18, ночь ~0.42
+    // публикуем канонические nightF/moonWash наружу (флуор-ковёр в items.js берёт их из game.js)
+    bloomState.nightF = nightF;
+    bloomState.moonWash = moonWash;
     return bloomState;
   }
 
