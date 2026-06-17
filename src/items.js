@@ -1296,7 +1296,7 @@ export function createFloorLamp() {
   // Абажур светится сам (emissive) + льёт тёплый свет в комнату — ГЛАВНЫЙ очаг уюта.
   const shadeMat = lambert(COLORS.lampshade, { emissive: 0x6a4a20 });
   g.add(box(0.46, 0.34, 0.46, shadeMat, 0, 1.52, 0));
-  const lamp = makeApplianceLight(0xffd29a, 7.0, [0, 1.5, 0]); // янтарный тёплый очаг
+  const lamp = makeApplianceLight(0xffd29a, 5.5, [0, 1.5, 0]); // янтарный тёплый очаг (компактнее, distance 7→5.5)
   g.add(lamp);
   // Торшер — электроприбор (cordLength): горит только при токе (game.js ставит powered).
   // Раньше абажур светился всегда — теперь, как ТВ/аквариум, зависит от розетки.
@@ -1304,7 +1304,7 @@ export function createFloorLamp() {
   g.userData.tick = (t) => {
     const on = !!g.userData.powered;
     lamp.visible = on; // погашенный источник исключается из шейдерного цикла освещения
-    lamp.intensity = on ? 4.8 * (0.97 + 0.03 * Math.sin(t * 2.0)) : 0; // лёгкое «дыхание» накала
+    lamp.intensity = on ? 3.8 * (0.97 + 0.03 * Math.sin(t * 2.0)) : 0; // лёгкое «дыхание» накала (убавлено 4.8→3.8)
     shadeMat.emissive.setHex(on ? 0x8a5a26 : 0x141008);
   };
   return g;
