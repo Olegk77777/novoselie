@@ -118,9 +118,6 @@ export function createLighting(scene, opts = {}) {
   const bloomState = {
     strength: 0.5, threshold: 0.64, tint: [1, 1, 1],
     hazeColor: new THREE.Color(0x16202e), hazeAmt: 0.1,
-    // ночность для светящегося-в-темноте декора (флуор-ковёр): публикуем УЖЕ посчитанные
-    // канонические nightF/moonWash (не новая формула), game.js кладёт их в items.NIGHT.
-    nightF: 0, moonWash: 0,
   };
   function setBloom(strength, threshold, tr, tg, tb) {
     bloomState.strength = strength;
@@ -151,7 +148,6 @@ export function createLighting(scene, opts = {}) {
       // Лёгкая сине-циановая дымка даже в пустой коробке — дальняя стена чуть тонет в мгле.
       bloomState.hazeColor.setHex(0x182f3c);
       bloomState.hazeAmt = 0.11;
-      bloomState.nightF = 0; bloomState.moonWash = 0; // окна/ночи ещё нет — флуор-ковёр не светится
       return bloomState;
     }
 
@@ -261,9 +257,6 @@ export function createLighting(scene, opts = {}) {
     // ГУЩЕ, чем было (запрос Олега «туман заползает даже внутрь»): база и ночной набор подняты.
     // Потолок плотности и чистый пол держит сам heightfog.js (yLow над сеткой + cap во врезке).
     bloomState.hazeAmt = 0.18 + 0.24 * nightF; // день ~0.18, ночь ~0.42
-    // публикуем канонические nightF/moonWash наружу (флуор-ковёр в items.js берёт их из game.js)
-    bloomState.nightF = nightF;
-    bloomState.moonWash = moonWash;
     return bloomState;
   }
 

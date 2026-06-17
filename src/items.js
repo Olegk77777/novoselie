@@ -79,12 +79,6 @@ const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ..
 // Тот же признак, что в lighting.js (дублируем одну строку, чтобы не плодить зависимость).
 const LOW_END = window.devicePixelRatio > 1.5 && 'ontouchstart' in window;
 
-// Текущая ночность сцены — публикует game.js из lighting.update() (тот же канонический nightF,
-// БЕЗ своей суточной математики — никакого третьего дубля SYNC). Светящийся-в-темноте декор
-// (флуоресцентный ковёр) читает её в своём tick, чтобы разгораться к ночи. f: 0 день → 1 ночь;
-// moon: добавочная подсветка в полнолуние.
-export const NIGHT = { f: 0, moon: 0 };
-
 // Точечный свет прибора: тёплая/холодная «лужица» от лампы/экрана. БЕЗ тени (дёшево),
 // с ограниченным радиусом (distance, decay 2) — не пересвечивает всю комнату. Стартовая
 // яркость 0; гасится/зажигается в userData.tick по g.userData.powered (нет тока — 0).
@@ -115,46 +109,6 @@ function makeMoteTexture() {
   c.fillRect(0, 0, 32, 32);
   moteTexture = new THREE.CanvasTexture(cv);
   return moteTexture;
-}
-
-// Процедурный фосфорный узор для флуоресцентного ковра (emissiveMap): БЕЛЫМ — то, что светится,
-// ЧЁРНЫМ — то, что нет. Совецкий ковровый орнамент: рамка + центральный медальон-кольца +
-// ромбическая сетка + угловые лучи. Генерится один раз и кэшируется (как makeMoteTexture).
-// 512×512 пропорции ковра 3×2 — растянется по box-UV, для PS1-стиля нормально.
-let glowRugTexture = null;
-function makeGlowRugTexture() {
-  if (glowRugTexture) return glowRugTexture;
-  const S = 512;
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = S;
-  const c = cv.getContext('2d');
-  c.fillStyle = '#000'; c.fillRect(0, 0, S, S); // чёрный фон = не светится
-  c.strokeStyle = '#ffffff'; c.lineCap = 'round'; c.lineJoin = 'round';
-  // двойная рамка
-  c.lineWidth = 14; c.strokeRect(34, 34, S - 68, S - 68);
-  c.lineWidth = 6; c.strokeRect(60, 60, S - 120, S - 120);
-  // центральный медальон — концентрические кольца
-  const cx = S / 2, cy = S / 2;
-  c.lineWidth = 9;
-  for (const r of [56, 92, 128]) { c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke(); }
-  // ромб в центре
-  c.lineWidth = 7;
-  c.beginPath();
-  c.moveTo(cx, cy - 150); c.lineTo(cx + 150, cy); c.lineTo(cx, cy + 150); c.lineTo(cx - 150, cy);
-  c.closePath(); c.stroke();
-  // угловые лучи-«солнышки» — короткие штрихи в каждом углу
-  c.lineWidth = 5;
-  for (const [ox, oy] of [[96, 96], [S - 96, 96], [96, S - 96], [S - 96, S - 96]]) {
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
-      c.beginPath();
-      c.moveTo(ox + Math.cos(a) * 10, oy + Math.sin(a) * 10);
-      c.lineTo(ox + Math.cos(a) * 30, oy + Math.sin(a) * 30);
-      c.stroke();
-    }
-  }
-  glowRugTexture = new THREE.CanvasTexture(cv);
-  glowRugTexture.colorSpace = THREE.SRGBColorSpace;
-  return glowRugTexture;
 }
 
 // === Пылинки в воздухе: еле заметные почти прозрачные частички, мягко СВЕТЯЩИЕСЯ ===
@@ -1218,36 +1172,6 @@ export function createFloorRug() {
   return g;
 }
 
-// === Флуоресцентный ковёр 3×2: днём блёклый, в ТЕМНОТЕ фосфорно светится (декор «игры со светом») ===
-// Один Lambert-материал: приглушённая шерсть (color) + emissiveMap фосфорного узора. Днём
-// emissiveIntensity≈0.04 — узор почти не виден; ночью разгорается до ~1.0 барвинково-циановым —
-// узор «зажигается» сам и мягко цветёт через bloom. Плюс низкое холодное гало (как лужа фонаря).
-// Ночность приходит из NIGHT (канонический nightF из lighting.js) — своей суточной формулы НЕТ.
-// Свечение без розетки (как лава-лампа/свеча/неон) — управляется только ночью, не током.
-const GLOW_RUG_PHOS = 0x6fd9e0; // барвинково-циановый фосфор (палитра зелёных ламп / луж фонарей)
-export function createGlowRug() {
-  const g = new THREE.Group();
-  const rugMat = new THREE.MeshLambertMaterial({
-    color: 0x2c2a30,                       // приглушённая тёмная шерсть — днём виден только он
-    emissive: GLOW_RUG_PHOS,
-    emissiveMap: makeGlowRugTexture(),     // белый узор = светится, чёрный фон = нет
-    emissiveIntensity: 0.04,               // стартовое (день) — узор еле тлеет
-  });
-  g.add(box(2.9, 0.05, 1.9, rugMat, 0, 0.025, 0));
-  // мягкое холодное гало у пола — «барвинковая лужа» (без тока, как лава-лампа)
-  const halo = makeApplianceLight(GLOW_RUG_PHOS, 3.5, [0, 0.12, 0]);
-  g.add(halo);
-  // плавное разгорание к ночи; фаза — из NIGHT (тот же расчёт, что свет комнаты)
-  let lvl = 0;
-  g.userData.tick = (t) => {
-    lvl += (NIGHT.f - lvl) * 0.05;             // экспон. сглаживание — фосфор разгорается в сумерках
-    const breathe = 0.92 + 0.08 * Math.sin(t * 0.7); // лёгкое «дыхание» свечения
-    rugMat.emissiveIntensity = 0.04 + (0.80 * lvl + 0.15 * NIGHT.moon) * breathe; // пик ~0.95
-    halo.intensity = (0.55 * lvl + 0.20 * NIGHT.moon) * breathe;
-  };
-  return g;
-}
-
 // === Круглый ковёр на пол 3×3 (награда за квест «соседи») ===
 // Плоский диск-цилиндр: верхняя крышка — круг, квадратная текстура ложится на неё и
 // обрезается в круг самой геометрией. Поэтому Олегу НЕ нужен альфа-канал — рисунок
@@ -2009,7 +1933,6 @@ export const MODEL_BUILDERS = {
   tv: createTV,
   tv_stand: createTVStand,
   floor_rug: createFloorRug,
-  glow_rug: createGlowRug,
   round_rug: createRoundRug,
   wall_rug: createWallRug,
   floor_lamp: createFloorLamp,

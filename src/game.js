@@ -3,23 +3,23 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=85';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=85';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=85';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes, NIGHT } from './items.js?v=85';
-import { createPlacement } from './placement.js?v=85';
-import { createUI } from './ui.js?v=85';
-import { renderItemIcon } from './icon.js?v=85';
-import { createPower } from './power.js?v=85';
-import { evaluateCombos } from './combos.js?v=85';
-import { isQuestDone } from './quests.js?v=85';
-import { createCat } from './cat.js?v=85';
-import { createLighting } from './lighting.js?v=85';
-import { createHeightFog } from './heightfog.js?v=85';
-import { createBloom } from './bloom.js?v=85';
-import { createFog } from './fog.js?v=85';
-import { createMusic } from './music.js?v=85';
-import { createCinema } from './cinema.js?v=85';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=86';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=86';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=86';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=86';
+import { createPlacement } from './placement.js?v=86';
+import { createUI } from './ui.js?v=86';
+import { renderItemIcon } from './icon.js?v=86';
+import { createPower } from './power.js?v=86';
+import { evaluateCombos } from './combos.js?v=86';
+import { isQuestDone } from './quests.js?v=86';
+import { createCat } from './cat.js?v=86';
+import { createLighting } from './lighting.js?v=86';
+import { createHeightFog } from './heightfog.js?v=86';
+import { createBloom } from './bloom.js?v=86';
+import { createFog } from './fog.js?v=86';
+import { createMusic } from './music.js?v=86';
+import { createCinema } from './cinema.js?v=86';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -766,11 +766,6 @@ async function init() {
     // времени (день холодный → закат янтарь → ночь тьма + серебро луны → дождь свинец).
     // update() заодно отдаёт параметры Bloom (ярче ночью/в полнолуние).
     let bloomParams = lighting.update(time, !!windowGlass);
-    // Ночность сцены → светящийся-в-темноте декор (флуор-ковёр). Берём канонические nightF/moonWash
-    // из того же расчёта, что свет (lighting.js), а не считаем свои — ковёр разгорается в фазе с ночью.
-    // ДО cinema-пересборки bloomParams (она роняет эти поля) и до прохода tickables.
-    NIGHT.f = bloomParams.nightF || 0;
-    NIGHT.moon = bloomParams.moonWash || 0;
     // Воздушная перспектива: цвет/плотность дымки дальней стены из того же расчёта, что свет
     // окна (SYNC). hazeColor уже в линейном рабочем пространстве (ColorManagement), врезка в
     // шейдере идёт до тон-маппинга — конверсия не нужна. Уют слегка проясняет комнату (как
