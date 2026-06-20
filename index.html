@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=87">
-  <link rel="stylesheet" href="design/type.css?v=87">
+  <link rel="stylesheet" href="design/colors.css?v=88">
+  <link rel="stylesheet" href="design/type.css?v=88">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -105,6 +105,40 @@
     }
     /* Звук выключен — иконка гаснет до приглушённого серого */
     #ui-sound.muted { color: var(--text-muted); }
+
+    /* === Кнопка «Фильтр» — переключает вид кадра В РЕЖИМЕ ЛЮБОВАНИЯ === */
+    /* Та же стеклянная плитка, что и «глаз»; сидит слева от него (right: 66px), на месте
+       кнопки звука — но видна ТОЛЬКО в режиме любования (звук там скрыт, конфликта нет).
+       Вне режима невидима и некликабельна: фильтры нужны лишь когда любуешься комнатой. */
+    #ui-filter {
+      position: fixed;
+      top: 14px;
+      right: 66px;
+      z-index: 6;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      background: linear-gradient(160deg, var(--panel-glass), var(--panel-glass-2));
+      border: 1px solid var(--panel-stroke);
+      border-radius: var(--r-btn);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.4);
+      color: var(--amber);
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.45s ease, color 0.3s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    #ui-filter svg { width: 24px; height: 24px; display: block; }
+    /* В режиме любования проявляем (приглушённо, как «глаз»), на наведении — ярче */
+    body.cinema #ui-filter { opacity: 0.32; pointer-events: auto; }
+    body.cinema #ui-filter:hover {
+      opacity: 1;
+      border-color: var(--amber);
+      box-shadow: 0 0 14px rgba(232, 185, 106, 0.3);
+    }
 
     /* Плавное появление/исчезновение элементов HUD */
     #ui-left, #ui-top, #ui-bottom, #ui-hint-toast, #ui-sound {
@@ -724,6 +758,82 @@
     }
 
     /* ============================================================
+       ФИЛЬТР «КИНЕСКОП» (CRT) — слои поверх кадра, видны по body.cine-filter-crt.
+       Создаются в cinema.js (как кино-слои). Старый ламповый телевизор: строки
+       развёртки, RGB-маска люминофора, выпуклое стекло, медленный «съезд кадра».
+       Всё — статичные градиенты (растеризуются раз) + один transform (composite-only):
+       ни одного нового прохода рендера, iPad-safe (тот же приём, что у плёночных слоёв).
+       ============================================================ */
+    #crt-grid, #crt-glass, #crt-roll {
+      position: fixed;
+      z-index: 3;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    #crt-grid, #crt-glass { inset: 0; }
+
+    /* Строки развёртки (тёмные горизонтальные) + апертурная RGB-маска (вертикальные
+       полоски люминофора). Обе ЗАТЕМНЯЮТ промежутки → multiply. Шаг крупный (4–6px),
+       чтобы читался на ретине и не давал муар. */
+    #crt-grid {
+      background-image:
+        repeating-linear-gradient(0deg,
+          rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 2px,
+          rgba(0, 0, 0, 0.34) 2px, rgba(0, 0, 0, 0.34) 4px),
+        repeating-linear-gradient(90deg,
+          rgba(255, 64, 64, 0.10) 0, rgba(255, 64, 64, 0.10) 2px,
+          rgba(64, 255, 96, 0.10) 2px, rgba(64, 255, 96, 0.10) 4px,
+          rgba(80, 120, 255, 0.10) 4px, rgba(80, 120, 255, 0.10) 6px);
+      mix-blend-mode: multiply;
+    }
+    body.cinema.cine-filter-crt #crt-grid { opacity: 0.9; }
+
+    /* Выпуклое стекло кинескопа: холодноватый блик сверху + сильно затемнённые углы
+       (округлый экран «съедает» периметр). Normal blend — просто кладёт свет/тень. */
+    #crt-glass {
+      background:
+        radial-gradient(ellipse 72% 56% at 50% 26%, rgba(200, 220, 255, 0.06), transparent 56%),
+        radial-gradient(ellipse 92% 90% at 50% 50%, transparent 50%, rgba(2, 4, 9, 0.62) 100%);
+    }
+    body.cinema.cine-filter-crt #crt-glass { opacity: 1; }
+
+    /* «Съезд кадра» (vsync roll): мягкая светлая полоса медленно ползёт сверху вниз.
+       screen — добавляет свет. transform-анимация = composite-only (GPU, без перерисовки). */
+    #crt-roll {
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 26vh;
+      background: linear-gradient(to bottom,
+        transparent 0%, rgba(255, 255, 255, 0.05) 46%,
+        rgba(255, 255, 255, 0.06) 54%, transparent 100%);
+      mix-blend-mode: screen;
+      will-change: transform;
+    }
+    body.cinema.cine-filter-crt #crt-roll { opacity: 1; animation: crt-roll 8s linear infinite; }
+    @keyframes crt-roll {
+      0%   { transform: translateY(-26vh); }
+      100% { transform: translateY(100vh); }
+    }
+
+    /* При «Кинескопе» приглушаем тёплую кино-виньетку — у CRT своя, в стекле (без
+       двойного затемнения углов). */
+    body.cinema.cine-filter-crt #cine-vignette { opacity: 0.4; }
+
+    /* Слабое железо (iPad): без RGB-маски (риск муара/нагрева) — только строки развёртки,
+       и без «съезда кадра». Стекло (статичный градиент) остаётся — оно почти бесплатно. */
+    body.cine-lowend.cinema.cine-filter-crt #crt-grid {
+      background-image:
+        repeating-linear-gradient(0deg,
+          rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 2px,
+          rgba(0, 0, 0, 0.30) 2px, rgba(0, 0, 0, 0.30) 4px);
+    }
+    body.cine-lowend #crt-roll { display: none; }
+    /* Уважение к prefers-reduced-motion — без ползущей полосы. */
+    @media (prefers-reduced-motion: reduce) { #crt-roll { display: none; } }
+
+    /* ============================================================
        ПЛЁНОЧНОЕ ЗЕРНО — ПОСТОЯННЫЙ слой поверх всей игры (благородное крупное).
        Это CSS-оверлей, а НЕ проход 3D-движка: браузер смешивает готовый кадр с
        тайлом зерна на видеокарте почти бесплатно — ни одного лишнего прохода рендера
@@ -836,6 +946,31 @@
       100% { opacity: 0; }
     }
 
+    /* Имя выбранного фильтра — коротко всплывает при переключении (правый низ поля,
+       симметрично датакоду ●REC слева). Гаснет сам через ~2 c. */
+    #cine-filter-name {
+      position: fixed;
+      right: 3.2vw;
+      bottom: 2.4vh;
+      z-index: 5;
+      pointer-events: none;
+      font-family: var(--font-num);
+      font-size: clamp(11px, 1.5vw, 16px);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #e8b96a;
+      text-shadow: 0 0 6px rgba(232, 185, 106, 0.45);
+      mix-blend-mode: screen;
+      opacity: 0;
+    }
+    #cine-filter-name.show { animation: cine-fname 1.9s ease forwards; }
+    @keyframes cine-fname {
+      0%   { opacity: 0; }
+      14%  { opacity: 0.72; }
+      66%  { opacity: 0.72; }
+      100% { opacity: 0; }
+    }
+
     /* === Обучающие стрелки-указатели (см. ui.js showPointer) === */
     /* Амбер-стрелка + бумажная подпись наводят новичка на кнопку/панель в начале игры.
        Появляются на несколько секунд и плавно гаснут. z-index выше HUD (5-6), ниже
@@ -921,6 +1056,6 @@
   <!-- Плёночное зерно: постоянный слой поверх всей игры (стиль и CSS — см. #film-grain выше) -->
   <div id="film-grain" aria-hidden="true"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=87"></script>
+  <script type="module" src="src/game.js?v=88"></script>
 </body>
 </html>

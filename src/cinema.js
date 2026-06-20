@@ -21,7 +21,7 @@
 
 import * as THREE from 'three';
 
-export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, osdDate, getFocusAnchors }) {
+export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, osdDate, getFocusAnchors, filters }) {
   // База орбиты = исходная поза камеры из camera.js: позиция (10, 10+targetY, 10), смотрит в
   // (0, targetY, 0). R и азимут A0 описывают её в полярных координатах вокруг центра комнаты.
   const R = Math.hypot(10, 10);
@@ -70,6 +70,14 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
   make('cine-vignette'); // тёплая виньетка (multiply)
   make('cine-grain');    // плёночное зерно (overlay) — сверху
 
+  // СЛОИ ФИЛЬТРА «КИНЕСКОП» (CRT). Видимы только по body.cine-filter-crt (см. index.html CSS).
+  // Тоже чистые CSS-оверлеи — ни одного нового прохода рендера: развёртка/маска люминофора —
+  // статичные градиенты (браузер растеризует раз), «съезд кадра» — transform (composite-only).
+  // Порядок добавления = порядок наложения: решётка под стеклом кинескопа, бегущая полоса сверху.
+  make('crt-grid');   // строки развёртки + апертурная RGB-маска (multiply)
+  make('crt-glass');  // выпуклое стекло: блик + затемнённые углы кинескопа
+  make('crt-roll');   // мягкая светлая полоса «съезда кадра» (vsync roll), едет вниз
+
   // Слабое железо (ретина+сенсор ≈ iPad): замораживаем «кипение» зерна (анимация полноэкранного
   // блендового слоя — единственный заметный расход; статичный тайл почти не отличим от живого).
   const LOW_END = window.devicePixelRatio > 1.5 && 'ontouchstart' in window;
@@ -92,6 +100,34 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
   // Тихая титульная строка на входе (CSS-анимация fade-in → hold → fade-out по классу .show).
   const card = make('cine-card');
   const cardLines = (cards && cards.length) ? cards : [];
+
+  // ===================== ФИЛЬТРЫ КАДРА (Плёнка / Кинескоп / …) =====================
+  // Список — это ДАННЫЕ ([{id,name}] из game.js, имена из локалей), движок их просто циклит.
+  // Каждый фильтр = свой класс body.cine-filter-<id>; CSS-слои показываются по нему. Базовый
+  // фильтр 'film' — пустой (текущий кино-вид), остальные ДОБАВЛЯЮТ слои поверх. Новый фильтр =
+  // запись в списке + блок CSS, без правки этой логики. Выбор запоминается между входами в режим.
+  const FILTERS = (filters && filters.length) ? filters : [{ id: 'film', name: '' }];
+  let filterIdx = 0;
+  // Имя выбранного фильтра коротко всплывает при переключении (правый нижний угол, как датакод).
+  const filterNameEl = make('cine-filter-name');
+  function applyFilter(i, silent) {
+    for (const f of FILTERS) document.body.classList.remove('cine-filter-' + f.id);
+    filterIdx = ((i % FILTERS.length) + FILTERS.length) % FILTERS.length;
+    const f = FILTERS[filterIdx];
+    document.body.classList.add('cine-filter-' + f.id);
+    if (!silent && f.name) {
+      filterNameEl.textContent = f.name;
+      filterNameEl.classList.remove('show');
+      void filterNameEl.offsetWidth; // reflow — перезапуск CSS-анимации появления
+      filterNameEl.classList.add('show');
+    }
+  }
+  // Циклим к следующему фильтру (по кнопке «глаз-плюс» в ui.js). Возврат — id (на будущее).
+  function cycleFilter() {
+    applyFilter(filterIdx + 1);
+    return FILTERS[filterIdx].id;
+  }
+  applyFilter(0, true); // поставить базовый класс ('film') сразу, без титра
 
   // ===================== ЧАСЫ СУТОК (SYNC со светом окна) =====================
   // lighting.js: phase=fract(time/360), sun=cos(phase·2π) → phase=0 ПОЛДЕНЬ, 0.5 ПОЛНОЧЬ.
@@ -226,5 +262,5 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
     if (active) updateOsd(time);
   }
 
-  return { enter, exit, update, isActive: () => active, setPlacing };
+  return { enter, exit, update, isActive: () => active, setPlacing, cycleFilter };
 }
