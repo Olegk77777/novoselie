@@ -98,7 +98,8 @@
     "osd_date": "14 · 11 · '9X",
     "filter_film": "Плёнка",
     "filter_crt": "Кинескоп",
-    "filter_vhs": "Кассета"
+    "filter_vhs": "Кассета",
+    "filter_s8": "8 мм"
   },
   "ui": {
     "comfort": "Уют",
