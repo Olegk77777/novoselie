@@ -99,7 +99,9 @@
     "filter_film": "Плёнка",
     "filter_crt": "Кинескоп",
     "filter_vhs": "Кассета",
-    "filter_s8": "8 мм"
+    "filter_s8": "8 мм",
+    "filter_pl": "Полароид",
+    "filter_pl_caption": "с новосельем"
   },
   "ui": {
     "comfort": "Уют",

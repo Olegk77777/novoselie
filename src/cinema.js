@@ -21,7 +21,7 @@
 
 import * as THREE from 'three';
 
-export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, osdDate, getFocusAnchors, filters }) {
+export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, osdDate, getFocusAnchors, filters, plCaption }) {
   // База орбиты = исходная поза камеры из camera.js: позиция (10, 10+targetY, 10), смотрит в
   // (0, targetY, 0). R и азимут A0 описывают её в полярных координатах вокруг центра комнаты.
   const R = Math.hypot(10, 10);
@@ -96,6 +96,14 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
   make('s8-leak');      // оранжевые засветки по краям (пульсируют, как на ленте)
   make('s8-vignette');  // мягкая ТЁПЛАЯ виньетка объектива 8 мм
   make('s8-scratch');   // тонкие вертикальные царапины/волоски (медленно «гуляют»)
+
+  // СЛОИ ФИЛЬТРА «ПОЛАРОИД» (открытка). Видимы только по body.cine-filter-pl (см. index.html CSS).
+  // Не видео, а ФОТО: белая рамка-кант вокруг кадра (широкая снизу), пастельный выцвет, мягкая
+  // виньетка, рукописная подпись на нижнем канте. Статичный «стоп-кадр» — без анимаций.
+  make('pl-grade');     // пастельный полароидный выцвет (низкий контраст, молочный, тёплый)
+  make('pl-vignette');  // мягкая виньетка фото
+  make('pl-frame');     // белая рамка-кант полароида (широкая снизу) — поверх кадра
+  make('pl-caption').textContent = plCaption || ''; // рукописная подпись на нижнем канте
 
   // Слабое железо (ретина+сенсор ≈ iPad): замораживаем «кипение» зерна (анимация полноэкранного
   // блендового слоя — единственный заметный расход; статичный тайл почти не отличим от живого).
