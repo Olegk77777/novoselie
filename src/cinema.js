@@ -122,9 +122,11 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
       filterNameEl.classList.add('show');
     }
   }
-  // Циклим к следующему фильтру (по кнопке «глаз-плюс» в ui.js). Возврат — id (на будущее).
-  function cycleFilter() {
-    applyFilter(filterIdx + 1);
+  // Выбрать фильтр по id (своя кнопка-«плитка» на каждый фильтр в ui.js — прямой выбор,
+  // не перебор). Возврат — id применённого фильтра.
+  function setFilter(id) {
+    const i = FILTERS.findIndex((f) => f.id === id);
+    if (i >= 0) applyFilter(i);
     return FILTERS[filterIdx].id;
   }
   applyFilter(0, true); // поставить базовый класс ('film') сразу, без титра
@@ -262,5 +264,5 @@ export function createCinema({ camera, targetY, getBaseZoom, cards, osdLabel, os
     if (active) updateOsd(time);
   }
 
-  return { enter, exit, update, isActive: () => active, setPlacing, cycleFilter };
+  return { enter, exit, update, isActive: () => active, setPlacing, setFilter };
 }

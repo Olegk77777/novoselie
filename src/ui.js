@@ -2,7 +2,7 @@
 // Все тексты — через функцию t() из locales/, в коде только ключи.
 // items: [{ id, name, iconUrl, count, enabled }] — из data/items.json (game.js).
 
-export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onCinema, onFilterCycle }) {
+export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onCinema, onFilterSelect, filters }) {
   // Десктоп (есть мышь и наведение) — показываем подписи горячих клавиш на кнопках.
   const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const hotkey = (key) => (isDesktop ? ` (${key})` : '');
@@ -46,21 +46,34 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
   document.body.appendChild(cinemaBtn);
   refreshCinema();
 
-  // Кнопка «Фильтр»: переключает вид кадра в режиме любования (Плёнка → Кинескоп → …).
-  // Живёт рядом с «глазом», но видна ТОЛЬКО в режиме любования (CSS по body.cinema) — вне
-  // его фильтры ни к чему. Иконка — ламповый телевизор с антенной (намёк на кинескоп-режим).
-  const filterBtn = document.createElement('button');
-  filterBtn.id = 'ui-filter';
-  filterBtn.type = 'button';
-  filterBtn.title = t('ui.filter');
-  filterBtn.setAttribute('aria-label', filterBtn.title);
-  filterBtn.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
-    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    '<rect x="2.5" y="7.5" width="19" height="12.5" rx="1.6"/>' +
-    '<path d="M8.5 7.5 12 4 15.5 7.5"/></svg>';
-  filterBtn.addEventListener('click', () => { if (onFilterCycle) onFilterCycle(); });
-  document.body.appendChild(filterBtn);
+  // Фильтры кадра: ОТДЕЛЬНАЯ кнопка-плитка на каждый фильтр (Плёнка / Кинескоп / …) —
+  // прямой выбор, видно все варианты сразу, активный подсвечен. Ряд живёт рядом с «глазом»,
+  // но виден ТОЛЬКО в режиме любования (CSS по body.cinema) — вне его фильтры ни к чему.
+  // По умолчанию активен первый фильтр (Плёнка) — то, что было до фильтров.
+  const filtersBar = document.createElement('div');
+  filtersBar.id = 'ui-filters';
+  const filterBtns = new Map(); // id → button (для подсветки активного)
+  let activeFilter = (filters && filters[0] && filters[0].id) || null;
+  function refreshFilters() {
+    for (const [id, b] of filterBtns) b.classList.toggle('active', id === activeFilter);
+  }
+  for (const f of (filters || [])) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ui-filter-btn';
+    b.textContent = f.name;        // подпись = имя фильтра (понятнее иконки)
+    b.title = f.name;
+    b.setAttribute('aria-label', f.name);
+    b.addEventListener('click', () => {
+      activeFilter = f.id;
+      refreshFilters();
+      if (onFilterSelect) onFilterSelect(f.id);
+    });
+    filterBtns.set(f.id, b);
+    filtersBar.appendChild(b);
+  }
+  document.body.appendChild(filtersBar);
+  refreshFilters();
 
   // Модальное уведомление для важных событий (квесты): крупно по центру, с кнопкой
   // ОК. События идут очередью — следующее показывается после закрытия текущего.

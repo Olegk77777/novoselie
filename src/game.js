@@ -3,23 +3,23 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=88';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=88';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=88';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=88';
-import { createPlacement } from './placement.js?v=88';
-import { createUI } from './ui.js?v=88';
-import { renderItemIcon } from './icon.js?v=88';
-import { createPower } from './power.js?v=88';
-import { evaluateCombos } from './combos.js?v=88';
-import { isQuestDone } from './quests.js?v=88';
-import { createCat } from './cat.js?v=88';
-import { createLighting } from './lighting.js?v=88';
-import { createHeightFog } from './heightfog.js?v=88';
-import { createBloom } from './bloom.js?v=88';
-import { createFog } from './fog.js?v=88';
-import { createMusic } from './music.js?v=88';
-import { createCinema } from './cinema.js?v=88';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=89';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=89';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=89';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=89';
+import { createPlacement } from './placement.js?v=89';
+import { createUI } from './ui.js?v=89';
+import { renderItemIcon } from './icon.js?v=89';
+import { createPower } from './power.js?v=89';
+import { evaluateCombos } from './combos.js?v=89';
+import { isQuestDone } from './quests.js?v=89';
+import { createCat } from './cat.js?v=89';
+import { createLighting } from './lighting.js?v=89';
+import { createHeightFog } from './heightfog.js?v=89';
+import { createBloom } from './bloom.js?v=89';
+import { createFog } from './fog.js?v=89';
+import { createMusic } from './music.js?v=89';
+import { createCinema } from './cinema.js?v=89';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -73,6 +73,13 @@ async function init() {
   // Режим любования (созерцание / lo-fi видео): дышащая камера + кино-слои поверх кадра.
   // Камера смотрит в (0, WALL_HEIGHT/2, 0) — это и есть targetY орбиты. Тексты — из локали
   // (в коде только ключи). enter()/exit() дёргаются из onCinema (кнопка-«глаз» в ui.js).
+  // Фильтры кадра режима любования (порядок = порядок кнопок-плиток в ui.js, первый — дефолт).
+  // 'film' — текущий кино-вид (базовый), 'crt' — эстетика лампового телевизора (кинескоп).
+  // Новый фильтр = ещё одна запись здесь + блок CSS в index.html (без правки логики).
+  const cinemaFilters = [
+    { id: 'film', name: t(locale, 'cinema.filter_film') },
+    { id: 'crt', name: t(locale, 'cinema.filter_crt') },
+  ];
   const cinema = createCinema({
     camera,
     targetY: WALL_HEIGHT / 2,
@@ -80,12 +87,7 @@ async function init() {
     cards: [t(locale, 'cinema.card_1'), t(locale, 'cinema.card_2'), t(locale, 'cinema.card_3')],
     osdLabel: t(locale, 'cinema.osd_rec'),
     osdDate: t(locale, 'cinema.osd_date'),
-    // Фильтры кадра режима любования (порядок = порядок переключения кнопкой «фильтр» в ui.js).
-    // 'film' — текущий кино-вид (базовый), 'crt' — эстетика лампового телевизора (кинескоп).
-    filters: [
-      { id: 'film', name: t(locale, 'cinema.filter_film') },
-      { id: 'crt', name: t(locale, 'cinema.filter_crt') },
-    ],
+    filters: cinemaFilters,
     // Дрейф точки внимания: камера медленно «замечает» окно, тёплые приборы, кота — как
     // засыпающий взгляд хозяина. Точки берём из текущей расстановки (вызывается на смене якоря).
     getFocusAnchors: () => {
@@ -593,8 +595,9 @@ async function init() {
         updateReservedLeft(true); // плавно вернуть на «рабочее» место
       }
     },
-    // Кнопка «фильтр» в режиме любования: циклим вид кадра (Плёнка → Кинескоп → …).
-    onFilterCycle: () => cinema.cycleFilter(),
+    // Фильтры кадра режима любования: своя кнопка на каждый, прямой выбор по id.
+    filters: cinemaFilters,
+    onFilterSelect: (id) => cinema.setFilter(id),
   });
   const placement = createPlacement({
     scene,
