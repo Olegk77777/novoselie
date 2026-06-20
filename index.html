@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=91">
-  <link rel="stylesheet" href="design/type.css?v=91">
+  <link rel="stylesheet" href="design/colors.css?v=93">
+  <link rel="stylesheet" href="design/type.css?v=93">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -854,14 +854,19 @@
        кадр). Деликатно — тёплая меланхолия, НЕ кислотный VHS-китч. CSS-оверлеи;
        выцвет цвета — backdrop-filter (только десктоп).
        ============================================================ */
-    #vhs-grade, #vhs-bleed, #vhs-scan, #vhs-top, #vhs-bottom {
+    #vhs-grade, #vhs-scan, #vhs-top, #vhs-bottom {
       position: fixed;
       z-index: 3;
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.6s ease;
     }
-    #vhs-grade, #vhs-bleed, #vhs-scan { inset: 0; }
+    #vhs-grade, #vhs-scan { inset: 0; }
+
+    /* НАСТОЯЩАЯ хром-аберрация (R/B расходятся от краёв объектов) + «съезд» нижней полосы
+       кадра (head-switch) — SVG-фильтр на самом холсте (defs — внизу body). Только на
+       десктопе: полноэкранный фильтр на canvas дорог для iPad (там — без аберрации/съезда). */
+    body:not(.cine-lowend).cinema.cine-filter-vhs > canvas { filter: url(#vhs-distort); }
 
     /* Выцвет ленты: тёплый молочный грейд (normal blend — translucent налёт) + лёгкий
        подъём чёрного. Настоящая ДЕСАТУРАЦИЯ кадра — backdrop-filter, только на десктопе. */
@@ -875,18 +880,6 @@
       backdrop-filter: saturate(0.82) contrast(0.93) brightness(1.04);
       -webkit-backdrop-filter: saturate(0.82) contrast(0.93) brightness(1.04);
     }
-
-    /* Хром-аберрация (усиленная): яркая бирюзовая бахрома у левого края, малиновая у
-       правого + широкая мягкая хром-разводка к бокам (цвета «расходятся»). screen. */
-    #vhs-bleed {
-      background:
-        linear-gradient(to right, rgba(0, 195, 225, 0.07) 0%, rgba(0, 195, 225, 0) 24%),
-        linear-gradient(to left, rgba(255, 45, 105, 0.07) 0%, rgba(255, 45, 105, 0) 24%),
-        linear-gradient(to right, rgba(0, 225, 240, 0.26) 0, rgba(0, 225, 240, 0) 6%),
-        linear-gradient(to left, rgba(255, 60, 120, 0.26) 0, rgba(255, 60, 120, 0) 6%);
-      mix-blend-mode: screen;
-    }
-    body.cinema.cine-filter-vhs #vhs-bleed { opacity: 1; }
 
     /* Мягкие горизонтальные VHS-строки — слабее, чем развёртка кинескопа (лента «мылит»). */
     #vhs-scan {
@@ -1168,7 +1161,39 @@
   <div id="error-overlay"></div>
   <!-- Плёночное зерно: постоянный слой поверх всей игры (стиль и CSS — см. #film-grain выше) -->
   <div id="film-grain" aria-hidden="true"></div>
+
+  <!-- SVG-фильтр «Кассеты» (VHS): накладывается на <canvas> в режиме любования (CSS:
+       body…cine-filter-vhs > canvas { filter:url(#vhs-distort) }), только на десктопе.
+       1) ХРОМ-АБЕРРАЦИЯ от объектов: разбиваем кадр на каналы R/G/B (feColorMatrix),
+          красный сдвигаем влево, синий вправо (feOffset), собираем обратно (feBlend screen)
+          → цветная кайма по контрастным краям предметов (как на настоящей ленте).
+       2) «СЪЕЗД» НИЗА (head-switch): нижнюю полосу кадра (субрегион y 93–100%) сдвигаем
+          вбок (feOffset) и кладём поверх (feMerge) → изображение внизу «срывается». -->
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <filter id="vhs-distort" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feColorMatrix in="SourceGraphic" type="matrix"
+        values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>
+      <feOffset in="r" dx="-2.2" dy="0" result="rS"/>
+      <feColorMatrix in="SourceGraphic" type="matrix"
+        values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
+      <feColorMatrix in="SourceGraphic" type="matrix"
+        values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b"/>
+      <feOffset in="b" dx="2.2" dy="0" result="bS"/>
+      <feBlend in="rS" in2="g" mode="screen" result="rg"/>
+      <feBlend in="rg" in2="bS" mode="screen" result="chroma"/>
+      <!-- «Съезд» нижней части кадра: две полосы со встречным горизонтальным сдвигом
+           (head-switch/tracking). Стоят на нижней трети — там, где в кадре есть пол/мебель,
+           а не пустой тёмный туман у самой кромки. dy=0 — рвём только по горизонтали. -->
+      <feOffset in="chroma" dx="-16" dy="0" x="0%" y="72%" width="100%" height="4%" result="tearA"/>
+      <feOffset in="chroma" dx="22" dy="0" x="0%" y="84%" width="100%" height="8%" result="tearB"/>
+      <feMerge>
+        <feMergeNode in="chroma"/>
+        <feMergeNode in="tearA"/>
+        <feMergeNode in="tearB"/>
+      </feMerge>
+    </filter>
+  </svg>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=91"></script>
+  <script type="module" src="src/game.js?v=93"></script>
 </body>
 </html>
