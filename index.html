@@ -7,8 +7,8 @@
   <title>...</title>
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=90">
-  <link rel="stylesheet" href="design/type.css?v=90">
+  <link rel="stylesheet" href="design/colors.css?v=91">
+  <link rel="stylesheet" href="design/type.css?v=91">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -849,11 +849,12 @@
     /* ============================================================
        ФИЛЬТР «КАССЕТА» (VHS) — слои поверх кадра, видны по body.cine-filter-vhs.
        Создаются в cinema.js. Домашняя видеозапись 90-х: выцветшая мягкая лента,
-       лёгкая хром-аберрация по краям, ненавязчивые tracking-полосы. Деликатно —
-       тёплая меланхолия, НЕ кислотный VHS-китч. CSS-оверлеи; «съезд дорожки» —
-       transform (composite-only). Выцвет цвета — backdrop-filter (только десктоп).
+       заметная хром-аберрация по краям и АНАЛОГОВЫЕ ИСКАЖЕНИЯ у верхней и нижней
+       кромок (снег + рваные строки head-switch, дрожат НА МЕСТЕ — не уезжают через
+       кадр). Деликатно — тёплая меланхолия, НЕ кислотный VHS-китч. CSS-оверлеи;
+       выцвет цвета — backdrop-filter (только десктоп).
        ============================================================ */
-    #vhs-grade, #vhs-bleed, #vhs-scan, #vhs-track {
+    #vhs-grade, #vhs-bleed, #vhs-scan, #vhs-top, #vhs-bottom {
       position: fixed;
       z-index: 3;
       pointer-events: none;
@@ -875,13 +876,14 @@
       -webkit-backdrop-filter: saturate(0.82) contrast(0.93) brightness(1.04);
     }
 
-    /* Хром-аберрация: бирюзовая бахрома у левого края, малиновая у правого + светлый
-       «head-switch» (искажение видеоголовки) у самой нижней кромки. screen — добавляет свет. */
+    /* Хром-аберрация (усиленная): яркая бирюзовая бахрома у левого края, малиновая у
+       правого + широкая мягкая хром-разводка к бокам (цвета «расходятся»). screen. */
     #vhs-bleed {
       background:
-        linear-gradient(to right, rgba(0, 200, 220, 0.10) 0, rgba(0, 200, 220, 0) 4%),
-        linear-gradient(to left, rgba(255, 40, 90, 0.10) 0, rgba(255, 40, 90, 0) 4%),
-        linear-gradient(to top, rgba(230, 230, 240, 0.12) 0, rgba(230, 230, 240, 0) 2.5%);
+        linear-gradient(to right, rgba(0, 195, 225, 0.07) 0%, rgba(0, 195, 225, 0) 24%),
+        linear-gradient(to left, rgba(255, 45, 105, 0.07) 0%, rgba(255, 45, 105, 0) 24%),
+        linear-gradient(to right, rgba(0, 225, 240, 0.26) 0, rgba(0, 225, 240, 0) 6%),
+        linear-gradient(to left, rgba(255, 60, 120, 0.26) 0, rgba(255, 60, 120, 0) 6%);
       mix-blend-mode: screen;
     }
     body.cinema.cine-filter-vhs #vhs-bleed { opacity: 1; }
@@ -895,24 +897,43 @@
     }
     body.cinema.cine-filter-vhs #vhs-scan { opacity: 1; }
 
-    /* Tracking-полоса: мягкая светлая лента нестабильности медленно ползёт вниз
-       (как дрожание дорожки). transform-анимация = composite-only (GPU). */
-    #vhs-track {
+    /* Аналоговые искажения у КРОМОК кадра (вместо бегущей полосы — не отвлекает движением).
+       «Снег» (шумовой тайл) + рваные горизонтальные строки нестабильности, сильнее у самой
+       кромки и тают к центру (mask-градиент). Снизу — зона head-switch (видеоголовка), шире.
+       screen — помехи светлые. Дрожат НА МЕСТЕ: анимация сдвигает только шум по X. */
+    #vhs-top, #vhs-bottom {
       left: 0;
       right: 0;
-      top: 0;
-      height: 16vh;
-      background: linear-gradient(to bottom,
-        rgba(255, 255, 255, 0) 0%, rgba(220, 225, 255, 0.05) 42%,
-        rgba(255, 255, 255, 0.09) 50%, rgba(220, 225, 255, 0.05) 58%,
-        rgba(255, 255, 255, 0) 100%);
+      background-image:
+        url('textures/grain_overlay.png'),
+        repeating-linear-gradient(0deg,
+          rgba(255, 255, 255, 0.07) 0, rgba(255, 255, 255, 0.07) 1px,
+          rgba(0, 0, 0, 0) 1px, rgba(0, 0, 0, 0) 3px);
+      background-size: 160px 160px, auto;
+      background-repeat: repeat, repeat;
       mix-blend-mode: screen;
-      will-change: transform;
     }
-    body.cinema.cine-filter-vhs #vhs-track { opacity: 1; animation: vhs-track 6.5s linear infinite; }
-    @keyframes vhs-track {
-      0%   { transform: translateY(-16vh); }
-      100% { transform: translateY(100vh); }
+    #vhs-top {
+      top: 0;
+      height: 7vh;
+      -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 25%, transparent 100%);
+      mask-image: linear-gradient(to bottom, #000 0, #000 25%, transparent 100%);
+    }
+    #vhs-bottom {
+      bottom: 0;
+      height: 9vh;
+      -webkit-mask-image: linear-gradient(to top, #000 0, #000 38%, transparent 100%);
+      mask-image: linear-gradient(to top, #000 0, #000 38%, transparent 100%);
+    }
+    body.cinema.cine-filter-vhs #vhs-top { opacity: 0.5; animation: vhs-snow 0.5s steps(1) infinite; }
+    body.cinema.cine-filter-vhs #vhs-bottom { opacity: 0.58; animation: vhs-snow 0.42s steps(1) infinite; }
+    /* Сдвигаем ТОЛЬКО шум (первый фон) по X — помехи «кипят» у кромки, строки стоят. */
+    @keyframes vhs-snow {
+      0%   { background-position: 0 0, 0 0; }
+      25%  { background-position: -43px 0, 0 0; }
+      50%  { background-position: 57px 0, 0 0; }
+      75%  { background-position: -23px 0, 0 0; }
+      100% { background-position: 0 0, 0 0; }
     }
 
     /* При «Кассете» слегка приглушаем сумеречный кино-грейд (свой выцвет у VHS),
@@ -920,10 +941,10 @@
     body.cinema.cine-filter-vhs #cine-grade { opacity: 0.13; }
     body.cinema.cine-filter-vhs #cine-osd { opacity: 0.82; }
 
-    /* Слабое железо (iPad): без десатурации (backdrop-filter дорог) и без бегущей полосы;
-       выцвет-налёт, аберрация и строки (статичные градиенты) остаются. */
-    body.cine-lowend #vhs-track { display: none; }
-    @media (prefers-reduced-motion: reduce) { #vhs-track { display: none; } }
+    /* Слабое железо (iPad) и prefers-reduced-motion: кромочные искажения СТАТИЧНЫ (без
+       «кипения» шума), но видны — выцвет, аберрация, строки и зоны помех остаются. */
+    body.cine-lowend #vhs-top, body.cine-lowend #vhs-bottom { animation: none; }
+    @media (prefers-reduced-motion: reduce) { #vhs-top, #vhs-bottom { animation: none; } }
 
     /* ============================================================
        ПЛЁНОЧНОЕ ЗЕРНО — ПОСТОЯННЫЙ слой поверх всей игры (благородное крупное).
@@ -1148,6 +1169,6 @@
   <!-- Плёночное зерно: постоянный слой поверх всей игры (стиль и CSS — см. #film-grain выше) -->
   <div id="film-grain" aria-hidden="true"></div>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=90"></script>
+  <script type="module" src="src/game.js?v=91"></script>
 </body>
 </html>
