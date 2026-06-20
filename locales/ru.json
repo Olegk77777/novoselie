@@ -97,7 +97,8 @@
     "osd_rec": "REC",
     "osd_date": "14 · 11 · '9X",
     "filter_film": "Плёнка",
-    "filter_crt": "Кинескоп"
+    "filter_crt": "Кинескоп",
+    "filter_vhs": "Кассета"
   },
   "ui": {
     "comfort": "Уют",
