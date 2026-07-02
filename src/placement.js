@@ -61,8 +61,9 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
   // Габариты в ПОДклетках с учётом поворота. Для диагональных углов (45°, 135°...)
   // берём описанный прямоугольник (AABB) повёрнутого предмета, округляя вверх:
   // лучше заблокировать чуть больше места, чем позволить предметам налезть друг на друга.
-  function footprintSub(steps) {
-    const [w, d] = def.size;
+  // size — [ширина, глубина] в клетках (у restore нет «предмета в руке», поэтому size явный).
+  function footprintSubOf(size, steps) {
+    const [w, d] = size;
     const theta = (steps * Math.PI) / 4;
     const cos = Math.abs(Math.cos(theta));
     const sin = Math.abs(Math.sin(theta));
@@ -71,6 +72,7 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
       d: Math.max(1, Math.ceil((w * sin + d * cos) * SUB - 1e-6)),
     };
   }
+  const footprintSub = (steps) => footprintSubOf(def.size, steps);
 
   // Якорная подклетка так, чтобы курсор был у центра предмета; зажата в границы пола
   function anchorFromSub(sub, steps) {
@@ -81,30 +83,32 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
     };
   }
 
-  // Все подклетки, которые предмет накрывает из якорной
-  function coveredKeys(anchor, steps) {
-    const fp = footprintSub(steps);
+  // Все подклетки, которые предмет размера size накрывает из якорной
+  function coveredKeysOf(size, anchor, steps) {
+    const fp = footprintSubOf(size, steps);
     const keys = [];
     for (let c = anchor.sc; c < anchor.sc + fp.w; c++) {
       for (let r = anchor.sr; r < anchor.sr + fp.d; r++) keys.push(keyOf(c, r));
     }
     return keys;
   }
+  const coveredKeys = (anchor, steps) => coveredKeysOf(def.size, anchor, steps);
 
   function isFree(anchor, steps) {
     const set = occupied[layerOf(def)];
     return coveredKeys(anchor, steps).every((k) => !set.has(k));
   }
 
-  // Центр прямоугольника предмета в мировых координатах
-  function rectCenter(anchor, steps) {
-    const fp = footprintSub(steps);
+  // Центр прямоугольника предмета размера size в мировых координатах
+  function rectCenterOf(size, anchor, steps) {
+    const fp = footprintSubOf(size, steps);
     return new THREE.Vector3(
       -cols / 2 + (anchor.sc + fp.w / 2) / SUB,
       0,
       -rows / 2 + (anchor.sr + fp.d / 2) / SUB
     );
   }
+  const rectCenter = (anchor, steps) => rectCenterOf(def.size, anchor, steps);
 
   // Луч из камеры через точку клика/курсора
   function setRayFromEvent(event) {
@@ -482,8 +486,105 @@ export function createPlacement({ scene, camera, canvas, floor, cols, rows, wall
     if (pointers.size === 0) pinchActive = false;
   });
 
+  // === Сохранение / восстановление ===
+  // serialize(): описываем каждый поставленный предмет данными (id, поворот, место).
+  //   Напольный — anchor {sc,sr}; настенный — wall {surfaceId,along,height}; на поверхности
+  //   (tv/магнитофон на тумбу) — mountedOn = ИНДЕКС хозяина в этом же массиве. Хозяин всегда
+  //   поставлен раньше гостя, поэтому его индекс меньше — при restore он уже готов.
+  function serialize() {
+    return placedItems.map((item) => {
+      const ud = item.userData;
+      const rec = { id: ud.def.id };
+      if (ud.wall) {
+        rec.wall = { surfaceId: ud.wall.surfaceId, along: ud.wall.along, height: ud.wall.height };
+      } else if (ud.host) {
+        rec.mountedOn = placedItems.indexOf(ud.host);
+        rec.rotationSteps = ud.rotationSteps || 0;
+      } else {
+        rec.anchor = { ...ud.anchor };
+        rec.rotationSteps = ud.rotationSteps || 0;
+      }
+      return rec;
+    });
+  }
+
+  // Построить настенный предмет из сохранённых данных (без призрака)
+  function buildWallItem(savedDef, wall) {
+    const surface = wallSurfaces.find((s) => s.id === wall.surfaceId) || wallSurfaces[0];
+    const item = savedDef.buildFn();
+    applyShadowFlags(item);
+    // Полуразмеры вдоль стены и по высоте — из габаритов модели (как в startPlacing)
+    const size = new THREE.Box3().setFromObject(item).getSize(new THREE.Vector3());
+    const half = { along: Math.max(size.x, size.z) / 2, h: size.y / 2 };
+    item.rotation.y = surface.rotationY;
+    item.position.copy(wallWorldPos(surface, wall.along, wall.height));
+    item.userData.def = savedDef;
+    item.userData.wall = {
+      surfaceId: surface.id, along: wall.along, height: wall.height,
+      aMin: wall.along - half.along, aMax: wall.along + half.along,
+      hMin: wall.height - half.h, hMax: wall.height + half.h,
+    };
+    scene.add(item);
+    placedItems.push(item);
+    return item;
+  }
+
+  // Построить напольный предмет из сохранённых данных
+  function buildFloorItem(savedDef, anchor, steps) {
+    const item = savedDef.buildFn();
+    applyShadowFlags(item);
+    item.rotation.y = (steps * Math.PI) / 4;
+    item.userData.def = savedDef;
+    item.userData.rotationSteps = steps;
+    item.position.copy(rectCenterOf(savedDef.size, anchor, steps));
+    item.userData.anchor = { ...anchor };
+    item.userData.keys = coveredKeysOf(savedDef.size, anchor, steps);
+    const set = occupied[savedDef.layer === 'rug' ? 'rug' : 'furniture'];
+    item.userData.keys.forEach((k) => set.add(k));
+    scene.add(item);
+    placedItems.push(item);
+    return item;
+  }
+
+  // Построить предмет на поверхности (тумба/стол/табурет) из сохранённых данных
+  function buildMountedItem(savedDef, host, steps) {
+    const item = savedDef.buildFn();
+    applyShadowFlags(item);
+    item.rotation.y = (steps * Math.PI) / 4;
+    item.userData.def = savedDef;
+    item.userData.rotationSteps = steps;
+    item.position.set(host.position.x, host.userData.def.surfaceHeight, host.position.z);
+    item.userData.host = host;
+    host.userData.occupant = item;
+    scene.add(item);
+    placedItems.push(item);
+    return item;
+  }
+
+  // restore(entries): поставить все предметы разом (при загрузке сохранения).
+  //   entries: [{ def, wall?, mountedOn?, anchor?, rotationSteps? }] — def уже разрешён в game.js.
+  //   Идём по порядку: хозяин раньше гостя, поэтому built[mountedOn] уже готов.
+  //   onLayoutChange зовём ОДИН раз в конце (не на каждый предмет) — единый пересчёт.
+  function restore(entries) {
+    const built = [];
+    for (const e of entries) {
+      if (!e.def) { built.push(null); continue; } // неизвестный id — пропускаем, держим индексы
+      if (e.wall) built.push(buildWallItem(e.def, e.wall));
+      else if (e.mountedOn != null) {
+        // Предмет стоял на поверхности: ставим на хозяина, если тот восстановился
+        const host = built[e.mountedOn];
+        built.push(host ? buildMountedItem(e.def, host, e.rotationSteps || 0) : null);
+      } else if (e.anchor) built.push(buildFloorItem(e.def, e.anchor, e.rotationSteps || 0));
+      else built.push(null); // нет ни стены, ни хозяина, ни якоря — битая запись, пропускаем
+    }
+    onLayoutChange(placedItems);
+    reportComfort();
+  }
+
   return {
     startPlacing,
+    serialize,
+    restore,
     isPlacing: () => ghost !== null,
     // Повернуть предмет «в руке» на 45° вокруг его центра
     rotate() {

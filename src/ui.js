@@ -2,7 +2,7 @@
 // Все тексты — через функцию t() из locales/, в коде только ключи.
 // items: [{ id, name, iconUrl, count, enabled }] — из data/items.json (game.js).
 
-export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onCinema, onFilterSelect, filters }) {
+export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onCinema, onFilterSelect, filters, onRestart }) {
   // Десктоп (есть мышь и наведение) — показываем подписи горячих клавиш на кнопках.
   const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   const hotkey = (key) => (isDesktop ? ` (${key})` : '');
@@ -45,6 +45,21 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
   });
   document.body.appendChild(cinemaBtn);
   refreshCinema();
+
+  // Кнопка «Начать заново»: стирает сохранённый прогресс и начинает игру с нуля.
+  // Та же стеклянная плитка, что глаз/звук, третья в углу. Подтверждение и сам сброс —
+  // в game.js (onRestart): ui только рисует кнопку. Прячется в режиме любования (CSS).
+  const restartBtn = document.createElement('button');
+  restartBtn.id = 'ui-restart';
+  restartBtn.type = 'button';
+  restartBtn.title = t('ui.restart');
+  restartBtn.setAttribute('aria-label', t('ui.restart'));
+  restartBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M4 12a8 8 0 1 1 2.3 5.6"/><path d="M4 20v-4h4"/></svg>';
+  restartBtn.addEventListener('click', () => { if (onRestart) onRestart(); });
+  document.body.appendChild(restartBtn);
 
   // Фильтры кадра: ОТДЕЛЬНАЯ кнопка-плитка на каждый фильтр (Плёнка / Кинескоп / …) —
   // прямой выбор, видно все варианты сразу, активный подсвечен. Ряд живёт рядом с «глазом»,
@@ -472,6 +487,21 @@ export function createUI({ t, items, maxComfort, onTake, onRotate, onReturn, onC
       if (!slot) return;
       slot.count += delta;
       refreshSlot(slot);
+    },
+    // Снимок панели для сохранения: остаток в каждой ячейке + заблокирована ли она
+    serialize() {
+      const counts = {}, locked = {};
+      for (const [id, slot] of slots) { counts[id] = slot.count; locked[id] = slot.locked; }
+      return { counts, locked };
+    },
+    // Восстановить панель из снимка (counts + locked), перерисовать ячейки
+    applySave(data) {
+      if (!data) return;
+      for (const [id, slot] of slots) {
+        if (data.counts && id in data.counts) slot.count = data.counts[id];
+        if (data.locked && id in data.locked) slot.locked = data.locked[id];
+        refreshSlot(slot);
+      }
     },
   };
 }

@@ -3,27 +3,33 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=96';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=96';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=96';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=96';
-import { createPlacement } from './placement.js?v=96';
-import { createUI } from './ui.js?v=96';
-import { renderItemIcon } from './icon.js?v=96';
-import { createPower } from './power.js?v=96';
-import { evaluateCombos } from './combos.js?v=96';
-import { isQuestDone } from './quests.js?v=96';
-import { createCat } from './cat.js?v=96';
-import { createLighting } from './lighting.js?v=96';
-import { createHeightFog } from './heightfog.js?v=96';
-import { createBloom } from './bloom.js?v=96';
-import { createFog } from './fog.js?v=96';
-import { createMusic } from './music.js?v=96';
-import { createCinema } from './cinema.js?v=96';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=97';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=97';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=97';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=97';
+import { createPlacement } from './placement.js?v=97';
+import { createUI } from './ui.js?v=97';
+import { renderItemIcon } from './icon.js?v=97';
+import { createPower } from './power.js?v=97';
+import { evaluateCombos } from './combos.js?v=97';
+import { isQuestDone } from './quests.js?v=97';
+import { createCat } from './cat.js?v=97';
+import { createLighting } from './lighting.js?v=97';
+import { createHeightFog } from './heightfog.js?v=97';
+import { createBloom } from './bloom.js?v=97';
+import { createFog } from './fog.js?v=97';
+import { createMusic } from './music.js?v=97';
+import { createCinema } from './cinema.js?v=97';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
 const GRID_ROWS = 8;
+
+// Сохранение прогресса в localStorage браузера (переживает закрытие вкладки).
+// SAVE_VERSION поднимаем при несовместимых изменениях структуры (новые предметы/квесты):
+// старое сохранение с другой версией игнорируется — игра начнётся заново, без поломок.
+const SAVE_KEY = 'novoselie_save';
+const SAVE_VERSION = 1;
 
 // Загружает словарь текстов (локализацию). В коде — только ключи, тексты — в JSON.
 async function loadLocale(lang) {
@@ -428,6 +434,7 @@ async function init() {
     checkQuests(placedItems, lastConnections);
     refreshComfort();
     bumpShadows(); // расстановка изменилась — пересчитать карту теней (autoUpdate=false)
+    saveGame();    // автосохранение: расстановка/электричество/бонусы/квесты изменились
   }
 
   // === Ремонт по шагам: мусор → окно → паркет → обои → мебель ===
@@ -476,6 +483,7 @@ async function init() {
       refreshComfort();
       completeRenoStep('window'); // модал «✓ выполнено» + обновить журнал
       ui.showHint(t(locale, 'ui.hint_reno_after_window'));
+      saveGame(); // ремонт-шаг: окно вставлено
       return;
     }
     if (def.applies === 'floor') {
@@ -508,6 +516,7 @@ async function init() {
         t(locale, renoDone.floor ? 'ui.hint_reno_next_wallpaper' : 'ui.hint_reno_next_parquet')
       );
     }
+    saveGame(); // ремонт-шаг: паркет или обои постелены
   }
 
   // Строительный мусор: кучи по комнате, убираются кликом (первый шаг ремонта)
@@ -567,6 +576,7 @@ async function init() {
       completeRenoStep('debris', () => ui.pointToQuests());
       ui.showHint(t(locale, 'ui.hint_reno_window'));
     }
+    saveGame(); // автосохранение: убрали кучу (в т.ч. частичная уборка мусора)
   }
   renderer.domElement.addEventListener('pointerdown', removeDebrisAt);
 
@@ -602,6 +612,21 @@ async function init() {
     // Фильтры кадра режима любования: своя кнопка на каждый, прямой выбор по id.
     filters: cinemaFilters,
     onFilterSelect: (id) => cinema.setFilter(id),
+    // Кнопка «Начать заново»: спрашиваем подтверждение (стереть прогресс необратимо),
+    // затем чистим сохранение и перезагружаем страницу — игра стартует с чистого листа.
+    onRestart: () => {
+      ui.showChoice({
+        text: t(locale, 'ui.restart_confirm_text'),
+        kicker: t(locale, 'ui.restart_confirm_kicker'),
+        okLabel: t(locale, 'ui.restart_confirm_yes'),
+        altLabel: t(locale, 'ui.restart_confirm_no'),
+        onOk: () => {
+          try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* приватный режим — просто перезагрузим */ }
+          location.reload();
+        },
+        onAlt: () => {},
+      });
+    },
   });
   const placement = createPlacement({
     scene,
@@ -642,14 +667,131 @@ async function init() {
     },
   });
 
+  // === Сохранение прогресса в localStorage ===
+  // Собираем ПОЛНЫЙ снимок логического состояния (не саму 3D-сцену): ремонт, предметы
+  // с местами, квесты, электрификация, финал, панель. Суммы уюта не пишем — они
+  // пересчитываются из этого при восстановлении.
+  function collectSave() {
+    return {
+      version: SAVE_VERSION,
+      reno: { debris: renoDone.debris, window: renoDone.window, floor: renoDone.floor, walls: renoDone.walls },
+      debrisLeft,
+      items: placement.serialize(),
+      quests: questState.map((q) => q.done),
+      everConnected: [...everConnected],
+      extensionUnlocked,
+      housewarmingShown,
+      ui: ui.serialize(),
+    };
+  }
+  // Пишем снимок в localStorage. В приватном режиме / при переполнении — тихо пропускаем
+  // (игра не должна падать из-за недоступного хранилища).
+  function saveGame() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(collectSave())); }
+    catch (e) { /* хранилище недоступно — играем без автосохранения */ }
+  }
+  // Читаем снимок. Нет сохранения / чужая версия / битый JSON → null (начнём новую игру).
+  function loadSave() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || s.version !== SAVE_VERSION) return null;
+      return s;
+    } catch (e) { return null; }
+  }
+
+  // Восстановить состояние из снимка. Тихо: модалки на время подавляем (иначе при загрузке
+  // выстрелят все уже-показанные уведомления), приветствие/стрелки не показываем.
+  function restoreState(save) {
+    const realShowModal = ui.showModal;
+    ui.showModal = () => {}; // подавляем модалки на время восстановления
+    try {
+      // 1) Ремонт — теми же функциями, что и обычный ремонт (без модалок/хинтов)
+      const initialDebris = debrisField.children.length;
+      const targetLeft = save.reno.debris ? 0 : Math.max(0, Math.min(save.debrisLeft ?? initialDebris, initialDebris));
+      while (debrisField.children.length > targetLeft) debrisField.remove(debrisField.children[0]);
+      debrisLeft = debrisField.children.length;
+      if (save.reno.debris) { renoDone.debris = true; renoComfort += DEBRIS_COMFORT; }
+      if (save.reno.window) {
+        windowGlass = applyWindow(walls, GRID_COLS, GRID_ROWS);
+        heightFog.applyTo(walls);
+        renoDone.window = true;
+        renoComfort += defs.get('reno_window')?.comfort || 0;
+      }
+      if (save.reno.floor) {
+        applyParquet(floor, GRID_COLS, GRID_ROWS);
+        renoDone.floor = true;
+        renoComfort += defs.get('reno_parquet')?.comfort || 0;
+      }
+      if (save.reno.walls) {
+        applyWallpaper(walls, heightFog.apply);
+        renoDone.walls = true;
+        renoComfort += defs.get('reno_wallpaper')?.comfort || 0;
+      }
+      rebuildTickables(); // окно/шторы могли добавить анимируемые узлы
+
+      // 2) Квесты — выставляем ДО расстановки предметов: иначе recompute внутри
+      //    placement.restore «выполнит» их заново (двойные награды) и покажет модалки.
+      for (let i = 0; i < questState.length; i++) questState[i].done = !!(save.quests && save.quests[i]);
+      questComfort = questState.reduce((s, q) => s + (q.done ? (q.def.reward?.comfort || 0) : 0), 0);
+
+      // 3) Электрификация и финал — тоже до recompute (иначе повторно разблокирует/поздравит)
+      everConnected.clear();
+      (save.everConnected || []).forEach((id) => everConnected.add(id));
+      extensionUnlocked = !!save.extensionUnlocked;
+      housewarmingShown = !!save.housewarmingShown;
+
+      // 4) Панель: остатки в ячейках и блокировки (награды-предметы и разблокировки уже тут)
+      ui.applySave(save.ui);
+
+      // 5) Предметы: строим по сохранённым данным; один общий recompute — в конце restore
+      const entries = (save.items || []).map((rec) => ({
+        def: defs.get(rec.id),
+        wall: rec.wall,
+        mountedOn: rec.mountedOn,
+        anchor: rec.anchor,
+        rotationSteps: rec.rotationSteps || 0,
+      }));
+      placement.restore(entries);
+    } catch (e) {
+      console.error('Не удалось восстановить сохранение:', e);
+    } finally {
+      ui.showModal = realShowModal; // вернуть настоящие модалки
+    }
+    // Журнал/уют — по факту восстановленного. Анонсы синхронизируем на текущие активные,
+    // чтобы позже не выстрелить модалом «новое задание» на уже открытые квесты.
+    refreshQuestsUI();
+    refreshComfort();
+    prevActiveIds = new Set(availablePending(questCtx(lastLayout, lastConnections)).map((q) => q.def.id));
+    questsAnnounced = true;
+  }
+
+  // Подсказка при загрузке сохранения: ведём к следующему незакрытому шагу ремонта,
+  // а если ремонт готов — обычное «возьми предмет».
+  function resumeHint() {
+    if (!renoDone.debris) return t(locale, 'ui.hint_reno_debris');
+    if (!renoDone.window) return t(locale, 'ui.hint_reno_window');
+    if (!renoDone.floor) return t(locale, 'ui.hint_reno_next_parquet');
+    if (!renoDone.walls) return t(locale, 'ui.hint_reno_next_wallpaper');
+    return t(locale, 'ui.hint_take');
+  }
+
   // Стартовое состояние: грязная комната. Заблокировано всё, кроме уборки мусора —
-  // окно, паркет и обои откроются по ходу. Первая подсказка — про мусор.
+  // окно, паркет и обои откроются по ходу.
   ui.setState('inSlot');
   ui.setLocked([...furnitureIds, 'reno_window', 'reno_parquet', 'reno_wallpaper'], true);
-  ui.showHint(t(locale, 'ui.hint_reno_debris'));
   refreshQuestsUI();
-  announceNewQuests(questCtx(lastLayout, lastConnections)); // запомнить стартовые (без модалов)
-  refreshComfort();
+
+  // Есть сохранение — тихо восстанавливаем прогресс. Нет — обычный старт грязной комнаты.
+  const saved = loadSave();
+  if (saved) {
+    restoreState(saved);
+  } else {
+    ui.showHint(t(locale, 'ui.hint_reno_debris'));
+    announceNewQuests(questCtx(lastLayout, lastConnections)); // запомнить стартовые (без модалов)
+    refreshComfort();
+  }
 
   // Левая полоса под HUD: меряем реальную ширину колонки #ui-left и сдвигаем
   // комнату вправо ровно на неё — плашки уюта/заданий больше не перекрывают комнату.
@@ -691,14 +833,17 @@ async function init() {
     onAlt: () => music.disable(), // играем без звука
   });
 
-  // Приветствие — показывается ВТОРЫМ, сразу после выбора звука (думерское, с первыми
-  // делами). Закрыл приветствие → на несколько секунд загораются стрелки над кучами
-  // мусора (первый шаг — убрать мусор). Стрелка на журнал заданий появится ПОЗЖЕ —
-  // когда мусор убран (см. removeDebrisAt), чтобы две подсказки не лезли разом.
-  ui.showModal(
-    t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'),
-    showDebrisArrows
-  );
+  // Приветствие + стрелки на мусор — ТОЛЬКО при новой игре (думерское, с первыми делами).
+  // Закрыл приветствие → на несколько секунд загораются стрелки над кучами мусора. При
+  // загрузке сохранения игрок уже в контексте — показываем лишь подсказку по текущему шагу.
+  if (saved) {
+    ui.showHint(resumeHint());
+  } else {
+    ui.showModal(
+      t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'),
+      showDebrisArrows
+    );
+  }
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
   window.addEventListener('keydown', (e) => {
