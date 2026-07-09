@@ -3,23 +3,24 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=97';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=97';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=97';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=97';
-import { createPlacement } from './placement.js?v=97';
-import { createUI } from './ui.js?v=97';
-import { renderItemIcon } from './icon.js?v=97';
-import { createPower } from './power.js?v=97';
-import { evaluateCombos } from './combos.js?v=97';
-import { isQuestDone } from './quests.js?v=97';
-import { createCat } from './cat.js?v=97';
-import { createLighting } from './lighting.js?v=97';
-import { createHeightFog } from './heightfog.js?v=97';
-import { createBloom } from './bloom.js?v=97';
-import { createFog } from './fog.js?v=97';
-import { createMusic } from './music.js?v=97';
-import { createCinema } from './cinema.js?v=97';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=98';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=98';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=98';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=98';
+import { createPlacement } from './placement.js?v=98';
+import { createUI } from './ui.js?v=98';
+import { renderItemIcon } from './icon.js?v=98';
+import { createPower } from './power.js?v=98';
+import { evaluateCombos } from './combos.js?v=98';
+import { isQuestDone } from './quests.js?v=98';
+import { createCat } from './cat.js?v=98';
+import { createLighting } from './lighting.js?v=98';
+import { createHeightFog } from './heightfog.js?v=98';
+import { createBloom } from './bloom.js?v=98';
+import { createFog } from './fog.js?v=98';
+import { createMusic } from './music.js?v=98';
+import { createCinema } from './cinema.js?v=98';
+import { createMenu } from './menu.js?v=98';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;
@@ -31,7 +32,20 @@ const GRID_ROWS = 8;
 const SAVE_KEY = 'novoselie_save';
 const SAVE_VERSION = 1;
 
+// Язык игры: русский и английский. Выбор игрока хранится в localStorage; если
+// выбора ещё не было — угадываем по языку браузера (кириллические локали → ru).
+const LANG_KEY = 'novoselie_lang';
+function detectLang() {
+  try {
+    const savedLang = localStorage.getItem(LANG_KEY);
+    if (savedLang === 'ru' || savedLang === 'en') return savedLang;
+  } catch (err) { /* приватный режим — просто угадываем по браузеру */ }
+  const nav = (navigator.language || 'en').toLowerCase();
+  return /^(ru|uk|be|kk)/.test(nav) ? 'ru' : 'en';
+}
+
 // Загружает словарь текстов (локализацию). В коде — только ключи, тексты — в JSON.
+// Если файл языка не загрузился (нет сети до CDN и т.п.) — откатываемся на русский.
 async function loadLocale(lang) {
   try {
     // cache: 'no-cache' — браузер каждый раз сверяет файл с сервером
@@ -40,6 +54,7 @@ async function loadLocale(lang) {
     return await response.json();
   } catch (err) {
     console.error('Не удалось загрузить локализацию:', err);
+    if (lang !== 'ru') return loadLocale('ru');
     return {};
   }
 }
@@ -64,7 +79,9 @@ function showError(message) {
 }
 
 async function init() {
-  const locale = await loadLocale('ru');
+  const lang = detectLang();
+  const locale = await loadLocale(lang);
+  document.documentElement.lang = lang; // язык страницы — для браузера и читалок
   document.title = t(locale, 'game.title');
 
   // Сцена — "мир", в который добавляются все объекты
@@ -820,30 +837,73 @@ async function init() {
     ],
   });
 
-  // Первый модал — ВЫБОР ЗВУКА. Так надо не по дизайну, а по необходимости: браузеры
-  // (особенно Safari) пускают звук только в ответ на явный клик. Клик по «Со звуком» и
-  // есть тот жест — музыка плавно появляется прямо под текстом приветствия. «Без звука»
-  // — играть в тишине (звук потом можно включить кнопкой в углу).
-  ui.showChoice({
-    text: t(locale, 'ui.sound_prompt_text'),
-    kicker: t(locale, 'ui.sound_prompt_kicker'),
-    okLabel: t(locale, 'ui.sound_prompt_on'),
-    altLabel: t(locale, 'ui.sound_prompt_off'),
-    onOk: () => music.enable(),   // клик = жест → звук точно заведётся, мягкий fade-in
-    onAlt: () => music.disable(), // играем без звука
-  });
+  // === Напоминание о цели при простое ===
+  // Игрок ~45 секунд ничего не делает (нет модалок, не любование, ничего в руке) —
+  // тост мягко напоминает текущую цель: следующий шаг ремонта или первое активное
+  // задание. Чтобы никто не застревал на «а что дальше?» — частая смерть казуалок.
+  const IDLE_NUDGE_MS = 45000;
+  let lastActivityTs = performance.now();
+  const noteActivity = () => { lastActivityTs = performance.now(); };
+  window.addEventListener('pointerdown', noteActivity);
+  window.addEventListener('keydown', noteActivity);
+  window.addEventListener('wheel', noteActivity, { passive: true });
 
-  // Приветствие + стрелки на мусор — ТОЛЬКО при новой игре (думерское, с первыми делами).
-  // Закрыл приветствие → на несколько секунд загораются стрелки над кучами мусора. При
-  // загрузке сохранения игрок уже в контексте — показываем лишь подсказку по текущему шагу.
-  if (saved) {
-    ui.showHint(resumeHint());
-  } else {
-    ui.showModal(
-      t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'),
-      showDebrisArrows
-    );
+  function idleGoalHint() {
+    // Ремонт не закончен — ведём по его шагам (та же логика, что при загрузке сейва)
+    if (!renoDone.debris || !renoDone.window || !renoDone.floor || !renoDone.walls) return resumeHint();
+    if (catSpotBlocked) return t(locale, 'ui.hint_idle_prefix') + t(locale, 'quests.free_cat_spot');
+    const pending = availablePending(questCtx(lastLayout, lastConnections));
+    if (pending.length) return t(locale, 'ui.hint_idle_prefix') + t(locale, `quests.${pending[0].def.id}`);
+    if (!housewarmingShown) return t(locale, 'ui.hint_idle_comfort'); // задания сделаны, уют не полон
+    return null; // 100% — больше не дёргаем, пусть любуется
   }
+  setInterval(() => {
+    if (document.hidden) return; // вкладка в фоне
+    const body = document.body.classList;
+    if (body.contains('menu') || body.contains('cinema')) return;
+    const modal = document.getElementById('ui-modal');
+    if (modal && !modal.hidden) return;   // открыт модал — не мешаем читать
+    if (placement.isPlacing()) return;    // предмет в руке — игрок и так занят делом
+    if (performance.now() - lastActivityTs < IDLE_NUDGE_MS) return;
+    const hint = idleGoalHint();
+    if (hint) ui.showHint(hint);
+    noteActivity(); // не чаще одного напоминания за период простоя
+  }, 5000);
+
+  // === Главное меню ===
+  // Поверх живой сцены (с сейвом за спиной меню — уже твоя обжитая комната).
+  // Продолжить/Новая игра, язык РУС/ENG, тумблер звука. Клик по кнопке меню — тот самый
+  // жест пользователя, по которому Safari разрешает звук (см. комментарий в menu.js).
+  createMenu({
+    t: (key) => t(locale, key),
+    hasSave: !!saved,
+    lang,
+    // Смена языка: запоминаем выбор и перезагружаем страницу — все тексты
+    // (панель, журнал, модалки) перерисуются уже на новом языке. Сейв не трогаем.
+    onLang: (next) => {
+      try { localStorage.setItem(LANG_KEY, next); } catch (err) { /* приватный режим */ }
+      location.reload();
+    },
+    // «Новая игра» при живом сейве (после подтверждения): стереть прогресс и начать заново
+    onWipe: () => {
+      try { localStorage.removeItem(SAVE_KEY); } catch (err) { /* приватный режим */ }
+      location.reload();
+    },
+    onStart: ({ sound }) => {
+      if (sound) music.enable(); else music.disable(); // клик = жест → звук заведётся
+      // Приветствие + стрелки на мусор — только при новой игре. При продолжении игрок
+      // уже в контексте — подсказка ведёт к следующему шагу.
+      if (saved) {
+        ui.showHint(resumeHint());
+      } else {
+        ui.showModal(
+          t(locale, 'ui.welcome_text'), t(locale, 'ui.welcome_kicker'), t(locale, 'ui.welcome_ok'),
+          showDebrisArrows
+        );
+      }
+      noteActivity(); // отсчёт простоя — от старта игры
+    },
+  });
 
   // Клавиатура: R — повернуть, Esc — вернуть предмет в ячейку
   window.addEventListener('keydown', (e) => {

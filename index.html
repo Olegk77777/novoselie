@@ -3,12 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Заголовок вкладки подставляется из locales/ru.json при запуске игры -->
+  <meta name="description" content="Housewarming / Новоселье — a quiet doomer game about making a home. Тихая думерская игра про обустройство квартиры в вечном ноябре.">
+  <!-- Заголовок вкладки подставляется из locales/<язык>.json при запуске игры -->
   <title>...</title>
+  <!-- Favicon: тёплое окно в ночной панельке (SVG прямо в строке — без лишнего файла) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='13' fill='%231a1a2e'/><rect x='19' y='13' width='26' height='38' rx='2' fill='%23e8b96a'/><rect x='30' y='13' width='4' height='38' fill='%231a1a2e'/><rect x='19' y='29' width='26' height='4' fill='%231a1a2e'/></svg>">
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=97">
-  <link rel="stylesheet" href="design/type.css?v=97">
+  <link rel="stylesheet" href="design/colors.css?v=98">
+  <link rel="stylesheet" href="design/type.css?v=98">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -1342,6 +1345,98 @@
     /* в режиме любования обучающие стрелки прячем (как и остальной HUD) */
     body.cinema .ui-pointer { opacity: 0; }
 
+    /* ============================================================
+       ГЛАВНОЕ МЕНЮ — оверлей поверх живой 3D-сцены (см. src/menu.js).
+       Титул + «Продолжить»/«Новая игра» + язык/звук. z-index 30 — выше
+       модалок (20): пока меню открыто, игра не должна ничем его перекрыть.
+       ============================================================ */
+    #menu {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at center, rgba(13, 13, 22, 0.5) 0%, rgba(9, 9, 16, 0.88) 100%);
+      transition: opacity 0.9s ease;
+    }
+    #menu.closing { opacity: 0; pointer-events: none; }
+    .menu-box {
+      text-align: center;
+      padding: 24px;
+      max-width: 92vw;
+    }
+    /* Титул — крупная «вывеска» тёплым кремом с ламповым ореолом */
+    .menu-title {
+      font-family: var(--font-display);
+      font-size: var(--fs-logo);
+      color: var(--text-cream);
+      letter-spacing: 0.01em;
+      line-height: 1.05;
+      margin: 14px 0 8px;
+      text-shadow: 0 0 34px rgba(232, 185, 106, 0.22), 0 6px 28px rgba(0, 0, 0, 0.85);
+    }
+    .menu-subtitle {
+      font-family: var(--font-paper);
+      font-size: var(--fs-paper);
+      color: var(--text-cream-dim);
+      opacity: 0.85;
+      margin-bottom: 34px;
+    }
+    .menu-buttons {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .menu-buttons .ui-modal-ok { min-width: 240px; }
+    .menu-confirm-text {
+      font-family: var(--font-paper);
+      font-size: var(--fs-paper);
+      color: var(--text-cream-dim);
+      white-space: pre-line;
+      line-height: 1.6;
+      margin-bottom: 18px;
+    }
+    /* Нижний ряд мелких кнопок: РУС | ENG | звук */
+    .menu-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 34px;
+    }
+    .menu-mini {
+      padding: 9px 16px;
+      background: linear-gradient(160deg, var(--panel-glass), var(--panel-glass-2));
+      border: 1px solid var(--panel-stroke);
+      border-radius: var(--r-btn);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.4);
+      color: var(--text-muted);
+      font-family: var(--font-ui);
+      font-size: var(--fs-ui);
+      font-weight: 600;
+      cursor: pointer;
+      transition: color 0.25s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .menu-mini:hover { border-color: var(--amber); color: var(--text-cream); }
+    .menu-mini.active {
+      color: var(--amber);
+      border-color: var(--amber);
+      box-shadow: 0 0 14px rgba(232, 185, 106, 0.28);
+    }
+    /* Пока меню открыто — весь HUD спрятан (как в любовании, плюс «глаз» и звук) */
+    body.menu #ui-left,
+    body.menu #ui-top,
+    body.menu #ui-bottom,
+    body.menu #ui-hint-toast,
+    body.menu #ui-sound,
+    body.menu #ui-restart,
+    body.menu #ui-cinema,
+    body.menu .ui-pointer {
+      opacity: 0;
+      pointer-events: none;
+    }
+
     /* Плашка ошибки — показывается, только если игра не запустилась */
     #error-overlay {
       display: none;
@@ -1405,6 +1500,6 @@
     </filter>
   </svg>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=97"></script>
+  <script type="module" src="src/game.js?v=98"></script>
 </body>
 </html>
