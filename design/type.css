@@ -1,27 +1,7 @@
-/* Новоселье — типографика. Все шрифты OFL + кириллица. */
-/*
-   Файлы шрифтов в проект пока не вложены (бинарники). Сейчас грузятся с Google
-   Fonts (всё OFL, коммерчески свободно). Перед релизом стоит скачать .woff2 и
-   положить в /fonts вместе с OFL.txt — чтобы игра не зависела от внешней сети:
-     Yeseva One     — fonts.google.com/specimen/Yeseva+One
-     Oswald         — fonts.google.com/specimen/Oswald
-     PT Mono        — fonts.google.com/specimen/PT+Mono
-     JetBrains Mono — fonts.google.com/specimen/JetBrains+Mono
-     Commissioner   — fonts.google.com/specimen/Commissioner
-     Caveat         — fonts.google.com/specimen/Caveat (рукопись, кириллица)
-*/
-
-/* --- Шрифты с Google Fonts (быстрый старт) --- */
-@import url('https://fonts.googleapis.com/css2?family=Commissioner:wght@300;400;500;600;700&family=Oswald:wght@400;500;600;700&family=PT+Mono&family=JetBrains+Mono:wght@400;500;700;800&family=Yeseva+One&family=Caveat:wght@400;600&display=swap');
-
-/* --- Локальные файлы (раскомментируй после загрузки в /fonts) --- */
-/*
-@font-face { font-family:'Yeseva One';     src:url('../fonts/YesevaOne-Regular.woff2') format('woff2');     font-weight:400; font-display:swap; }
-@font-face { font-family:'Oswald';         src:url('../fonts/Oswald-VariableFont.woff2') format('woff2');   font-weight:300 700; font-display:swap; }
-@font-face { font-family:'PT Mono';        src:url('../fonts/PTMono-Regular.woff2') format('woff2');        font-weight:400; font-display:swap; }
-@font-face { font-family:'JetBrains Mono'; src:url('../fonts/JetBrainsMono-VariableFont.woff2') format('woff2'); font-weight:400 800; font-display:swap; }
-@font-face { font-family:'Commissioner';   src:url('../fonts/Commissioner-VariableFont.woff2') format('woff2');   font-weight:300 700; font-display:swap; }
-*/
+/* Новоселье — типографика: роли шрифтов и размеры. Все шрифты OFL + кириллица.
+   Сами @font-face вынесены в design/fonts.css (грузит локальные woff2 из /fonts) —
+   игра НЕ зависит от Google Fonts / внешней сети. Источники и лицензии — fonts/README.txt.
+   Обновить/добавить вес шрифта — перегенерировать fonts.css (см. его шапку). */
 
 :root {
   /* --- Роли шрифтов --- */
@@ -30,7 +10,7 @@
   --font-paper:   'PT Mono', 'Courier New', monospace;   /* бумаги: задания, тосты, заметки */
   --font-num:     'JetBrains Mono', monospace;           /* числа-счётчики, бейджи */
   --font-ui:      'Commissioner', system-ui, sans-serif; /* кнопки, подписи, body UI */
-  --font-hand:    'Caveat', 'Segoe Script', cursive;     /* рукопись: подпись-«открытка» (фильтр Полароид) */
+  --font-hand:    'Caveat', 'Segoe Script', cursive;     /* рукопись: подпись-«открытка» (фильтр «Открытка») */
 
   /* --- Адаптивная шкала (читаемо на iPad/телефоне) ---
      В игре HUD на весь экран — используем vw (контейнера нет). */

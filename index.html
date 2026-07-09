@@ -10,8 +10,10 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='13' fill='%231a1a2e'/><rect x='19' y='13' width='26' height='38' rx='2' fill='%23e8b96a'/><rect x='30' y='13' width='4' height='38' fill='%231a1a2e'/><rect x='19' y='29' width='26' height='4' fill='%231a1a2e'/></svg>">
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
-  <link rel="stylesheet" href="design/colors.css?v=98">
-  <link rel="stylesheet" href="design/type.css?v=98">
+  <!-- Локальные шрифты (woff2, /fonts) — грузим ПЕРВЫМИ, чтобы type.css уже застал их. -->
+  <link rel="stylesheet" href="design/fonts.css?v=99">
+  <link rel="stylesheet" href="design/colors.css?v=99">
+  <link rel="stylesheet" href="design/type.css?v=99">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -1500,6 +1502,6 @@
     </filter>
   </svg>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=98"></script>
+  <script type="module" src="src/game.js?v=99"></script>
 </body>
 </html>
