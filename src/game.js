@@ -3,24 +3,24 @@
 import * as THREE from 'three';
 // ?v=N в импортах — версия для сброса кэша браузера. При изменении кода поднять
 // это число на 1 во всех импортах ниже И в index.html (см. CLAUDE.md, раздел «Кэш»).
-import { createFloor, createGridLines, applyParquet } from './grid.js?v=99';
-import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=99';
-import { createIsoCamera, attachZoomControls } from './camera.js?v=99';
-import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=99';
-import { createPlacement } from './placement.js?v=99';
-import { createUI } from './ui.js?v=99';
-import { renderItemIcon } from './icon.js?v=99';
-import { createPower } from './power.js?v=99';
-import { evaluateCombos } from './combos.js?v=99';
-import { isQuestDone } from './quests.js?v=99';
-import { createCat } from './cat.js?v=99';
-import { createLighting } from './lighting.js?v=99';
-import { createHeightFog } from './heightfog.js?v=99';
-import { createBloom } from './bloom.js?v=99';
-import { createFog } from './fog.js?v=99';
-import { createMusic } from './music.js?v=99';
-import { createCinema } from './cinema.js?v=99';
-import { createMenu } from './menu.js?v=99';
+import { createFloor, createGridLines, applyParquet } from './grid.js?v=100';
+import { createWalls, WALL_HEIGHT, getWallSurfaces, applyWallpaper, applyWindow, DOOR_CENTER_Z } from './walls.js?v=100';
+import { createIsoCamera, attachZoomControls } from './camera.js?v=100';
+import { MODEL_BUILDERS, createDebrisField, createDebrisArrow, createDustMotes } from './items.js?v=100';
+import { createPlacement } from './placement.js?v=100';
+import { createUI } from './ui.js?v=100';
+import { renderItemIcon } from './icon.js?v=100';
+import { createPower } from './power.js?v=100';
+import { evaluateCombos } from './combos.js?v=100';
+import { isQuestDone } from './quests.js?v=100';
+import { createCat } from './cat.js?v=100';
+import { createLighting } from './lighting.js?v=100';
+import { createHeightFog } from './heightfog.js?v=100';
+import { createBloom } from './bloom.js?v=100';
+import { createFog } from './fog.js?v=100';
+import { createMusic } from './music.js?v=100';
+import { createCinema } from './cinema.js?v=100';
+import { createMenu } from './menu.js?v=100';
 
 // Размер комнаты в клетках (см. CONCEPT.md, v0.1)
 const GRID_COLS = 10;

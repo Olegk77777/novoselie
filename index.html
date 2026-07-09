@@ -11,9 +11,9 @@
 
   <!-- Дизайн-токены (гибрид «Уют»: стекло-HUD + бумага ЖЭКа). См. design/STYLE.md -->
   <!-- Локальные шрифты (woff2, /fonts) — грузим ПЕРВЫМИ, чтобы type.css уже застал их. -->
-  <link rel="stylesheet" href="design/fonts.css?v=99">
-  <link rel="stylesheet" href="design/colors.css?v=99">
-  <link rel="stylesheet" href="design/type.css?v=99">
+  <link rel="stylesheet" href="design/fonts.css?v=100">
+  <link rel="stylesheet" href="design/colors.css?v=100">
+  <link rel="stylesheet" href="design/type.css?v=100">
 
   <style>
     /* Убираем отступы браузера, чтобы 3D-сцена занимала весь экран */
@@ -1455,12 +1455,14 @@
     }
   </style>
 
-  <!-- importmap говорит браузеру, где брать Three.js (с CDN, версия зафиксирована) -->
+  <!-- importmap говорит браузеру, где брать Three.js. ЛОКАЛЬНО (vendor/three.module.js) —
+       игра не зависит от внешней сети (важно для itch.io/оффлайна), как и шрифты в /fonts.
+       Версия зафиксирована (0.170.0). Обновить = перекачать build/three.module.js той версии
+       из unpkg и заменить файл. Addons (examples/jsm) в коде НЕ используются, поэтому их нет. -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+      "three": "./vendor/three.module.js"
     }
   }
   </script>
@@ -1502,6 +1504,6 @@
     </filter>
   </svg>
   <!-- ?v=N — версия для сброса кэша. При изменении кода бампать число (см. CLAUDE.md) -->
-  <script type="module" src="src/game.js?v=99"></script>
+  <script type="module" src="src/game.js?v=100"></script>
 </body>
 </html>
